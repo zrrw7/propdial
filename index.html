@@ -220,7 +220,29 @@ a{color:inherit;text-decoration:none}
   padding:18px 18px 16px;color:#fff;
 }
 .owner-card-name{font-size:21px;font-weight:900;letter-spacing:-.5px;margin-bottom:4px;line-height:1.2}
-.owner-card-phone{font-size:24px;font-weight:800;letter-spacing:.5px;margin-bottom:10px;font-variant-numeric:tabular-nums}
+.owner-card-phone{font-size:24px;font-weight:800;letter-spacing:.5px;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.phone-edit-wrap{margin-bottom:10px}
+.phone-edit-label{font-size:10px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px}
+.phone-edit{
+  font-size:22px;font-weight:800;letter-spacing:.5px;
+  background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.25);
+  border-radius:var(--r8);color:#fff;width:100%;outline:none;
+  padding:8px 12px;font-variant-numeric:tabular-nums;
+  font-family:var(--font);transition:border-color .15s;
+}
+.phone-edit:focus{border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.15)}
+.phone-edit::placeholder{color:rgba(255,255,255,.4)}
+.phone-edit-actions{display:flex;gap:8px;margin-top:6px;margin-bottom:8px}
+.btn-save-phone{
+  padding:5px 12px;border-radius:var(--r8);font-size:12px;font-weight:700;
+  background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25);
+  transition:all .15s;
+}
+.btn-save-phone:active{background:rgba(255,255,255,.25)}
+.phone-normalized-tag{
+  font-size:11px;color:rgba(255,255,255,.6);font-weight:600;
+  display:flex;align-items:center;gap:4px;
+}
 .owner-card-badges{display:flex;gap:6px;flex-wrap:wrap}
 .bdg{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:.2px}
 .bdg-white {background:rgba(255,255,255,.18);color:#fff}
@@ -547,6 +569,95 @@ function stats(list) {
 }
 
 // ══════════════════════════════════════════════════════════════════
+// PHONE NORMALIZATION
+// Converts any raw number into +[countrycode][number] format
+// based on the owner's Country field.
+// ══════════════════════════════════════════════════════════════════
+
+// Country name / alias → dial code
+const DIAL_CODES = {
+  // Gulf & Middle East
+  'uae':971,'united arab emirates':971,'emirates':971,'u.a.e':971,'u.a.e.':971,'dubai':971,'abu dhabi':971,
+  'saudi arabia':966,'ksa':966,'saudi':966,'kingdom of saudi arabia':966,'ksa ':966,
+  'kuwait':965,'qatar':974,'bahrain':973,'oman':968,
+  'jordan':962,'lebanon':961,'egypt':20,'iraq':964,'iran':98,
+  'israel':972,'palestine':970,'syria':963,'turkey':90,'turkiye':90,
+  'yemen':967,'libya':218,'morocco':212,'tunisia':216,'algeria':213,
+  'sudan':249,'somalia':252,
+  // Asia
+  'india':91,'pakistan':92,'bangladesh':880,'sri lanka':94,'nepal':977,
+  'china':86,'japan':81,'south korea':82,'korea':82,'north korea':850,
+  'philippines':63,'indonesia':62,'malaysia':60,'singapore':65,
+  'thailand':66,'vietnam':84,'hong kong':852,'taiwan':886,'macau':853,
+  'myanmar':95,'cambodia':855,'laos':856,'mongolia':976,
+  'uzbekistan':998,'kazakhstan':7,'afghanistan':93,
+  // Europe
+  'uk':44,'united kingdom':44,'britain':44,'england':44,'great britain':44,'scotland':44,'wales':44,
+  'france':33,'germany':49,'italy':39,'spain':34,'portugal':351,
+  'netherlands':31,'holland':31,'belgium':32,'luxembourg':352,
+  'switzerland':41,'austria':43,'sweden':46,'norway':47,
+  'denmark':45,'finland':358,'ireland':353,'iceland':354,
+  'poland':48,'russia':7,'ukraine':380,'greece':30,
+  'czech republic':420,'czechia':420,'hungary':36,'romania':40,
+  'bulgaria':359,'croatia':385,'serbia':381,'slovakia':421,
+  'slovenia':386,'albania':355,'macedonia':389,'moldova':373,
+  'estonia':372,'latvia':371,'lithuania':370,'belarus':375,
+  'cyprus':357,'malta':356,'monaco':377,'liechtenstein':423,
+  // Americas
+  'usa':1,'united states':1,'us':1,'america':1,'united states of america':1,
+  'canada':1,'mexico':52,'brazil':55,'argentina':54,
+  'colombia':57,'chile':56,'peru':51,'venezuela':58,
+  'ecuador':593,'bolivia':591,'paraguay':595,'uruguay':598,
+  'panama':507,'costa rica':506,'guatemala':502,'honduras':504,
+  'el salvador':503,'nicaragua':505,'cuba':53,'dominican republic':1,
+  'puerto rico':1,'jamaica':1,'trinidad':1,'trinidad and tobago':1,
+  // Africa
+  'south africa':27,'nigeria':234,'kenya':254,'ethiopia':251,
+  'ghana':233,'tanzania':255,'uganda':256,'rwanda':250,
+  'senegal':221,'cameroon':237,'angola':244,'zambia':260,
+  'zimbabwe':263,'mozambique':258,'botswana':267,'namibia':264,
+  // Oceania
+  'australia':61,'new zealand':64,'fiji':679,'papua new guinea':675,
+};
+
+function getDialCode(country) {
+  if (!country) return null;
+  const key = String(country).toLowerCase().trim().replace(/\.$/, '');
+  if (DIAL_CODES[key] !== undefined) return DIAL_CODES[key];
+  // Partial / contains match
+  for (const [k, v] of Object.entries(DIAL_CODES)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return null;
+}
+
+function normalizePhone(raw, country) {
+  if (!raw) return '';
+  // Strip spaces, dashes, dots, parentheses, slashes
+  let num = String(raw).replace(/[\s\-\.\(\)\/\\]/g, '');
+  // Keep only digits and leading +
+  num = num.replace(/[^\d+]/g, '');
+  if (!num) return '';
+
+  // Already international format — return as-is
+  if (num.startsWith('+')) return num;
+
+  // 00XXXX → +XXXX
+  if (num.startsWith('00')) return '+' + num.slice(2);
+
+  const code = getDialCode(country);
+  if (!code) return num; // Unknown country — return cleaned digits
+
+  const codeStr = String(code);
+  // Strip leading zeros (local format e.g. 0XXXXXXXXX)
+  const stripped = num.replace(/^0+/, '');
+  // Already has country code digits prepended
+  if (stripped.startsWith(codeStr)) return '+' + stripped;
+  // Prepend country code
+  return '+' + codeStr + stripped;
+}
+
+// ══════════════════════════════════════════════════════════════════
 // DATA MODEL
 // ══════════════════════════════════════════════════════════════════
 const COLS = ['Date','Procedure Value','Area','Project','Building Name','Size','Unit Number','Owner Name','Mobile','Country'];
@@ -562,8 +673,8 @@ function mkOwner(row) {
     size:           String(row['Size'] ?? ''),
     unitNumber:     String(row['Unit Number'] ?? ''),
     ownerName:      String(row['Owner Name'] ?? ''),
-    mobile:         String(row['Mobile'] ?? '').replace(/\s+/g,''),
     country:        String(row['Country'] ?? ''),
+    mobile:         normalizePhone(String(row['Mobile'] ?? ''), String(row['Country'] ?? '')),
     // call tracking
     callStatus:    null,
     leadCategory:  null,
@@ -823,10 +934,20 @@ function showUploadPreview(owners, errs, defName) {
       <input class="form-input" id="list-name" value="${esc(defName)}" placeholder="e.g. Serenia Owners June 2026">
     </div>
     <div class="text-xs text-gray mb8">Preview (first 3 rows)</div>
+    ${(() => {
+      const normalized = owners.filter(o => o.mobile).length;
+      const withCode   = owners.filter(o => o.mobile.startsWith('+')).length;
+      return `<div style="background:var(--p-xlight);border:1px solid var(--p-mid);border-radius:var(--r8);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--p-dark);font-weight:600">
+        📞 ${withCode} / ${normalized} numbers successfully converted to international format
+      </div>`;
+    })()}
     ${owners.slice(0,3).map(o=>`
       <div style="border:1px solid var(--g200);border-radius:var(--r8);padding:10px 12px;margin-bottom:7px">
         <div style="font-weight:800;font-size:14px">${esc(o.ownerName)||'(no name)'}</div>
-        <div style="font-size:12px;color:var(--g500)">${esc(o.mobile)} · ${esc(o.project)||'—'} · ${esc(o.buildingName)||'—'} · Unit ${esc(o.unitNumber)||'—'}</div>
+        <div style="font-size:12px;color:var(--g500);margin-top:2px">${esc(o.project)||'—'} · ${esc(o.buildingName)||'—'} · Unit ${esc(o.unitNumber)||'—'}</div>
+        <div style="font-size:13px;font-weight:700;color:${o.mobile.startsWith('+')?'var(--green)':'var(--amber)'};margin-top:4px">
+          📞 ${esc(o.mobile)||'No number'} ${o.country?'('+esc(o.country)+')':''}
+        </div>
       </div>`).join('')}
     <button class="btn btn-primary btn-xl mt8" onclick="saveUpload()">Save List · ${owners.length} Owners</button>`;
 }
@@ -1033,7 +1154,16 @@ function renderCalling() {
     <div class="owner-card">
       <div class="owner-card-header">
         <div class="owner-card-name">${esc(owner.ownerName)||'(No Name)'}</div>
-        <div class="owner-card-phone">📞 ${esc(owner.mobile)||'No number'}</div>
+        <div class="phone-edit-wrap">
+          <div class="phone-edit-label">📞 Phone Number — tap to edit</div>
+          <input type="tel" id="phone-edit" class="phone-edit"
+            value="${esc(owner.mobile)}" placeholder="Enter number…"
+            oninput="onPhoneEdit(this.value)">
+          <div class="phone-edit-actions">
+            <button class="btn-save-phone" onclick="saveEditedPhone()">💾 Save Number</button>
+            <button class="btn-save-phone" onclick="reNormalizePhone()">🔄 Re-normalize</button>
+          </div>
+        </div>
         <div class="owner-card-badges" id="owner-badges">${ownerBadges(owner)}</div>
       </div>
       <div class="owner-card-body">
@@ -1056,10 +1186,13 @@ function renderCalling() {
       📱 <strong>iPhone:</strong> Tap Call — iOS confirms then opens Phone app. After your call, swipe back to PropDial and mark the result below.
     </div>
 
-    <!-- Call Button -->
-    <a href="tel:${esc(owner.mobile)}" onclick="recordAttempt()" class="btn btn-call btn-xl mb8" style="display:flex">
-      Call ${esc(owner.ownerName?.split(' ')[0] || 'Owner')}
-    </a>
+    <!-- Call Button — uses live phone-edit value -->
+    <button onclick="callOwner()" class="btn btn-call btn-xl mb8">
+      Call ${esc(toTitleCase(owner.ownerName?.split(' ')[0] || 'Owner'))}
+    </button>
+    <button onclick="saveContact()" class="btn btn-secondary btn-block mb8" style="font-size:15px;font-weight:800;padding:14px">
+      👤 Save to iPhone Contacts
+    </button>
     <button class="btn btn-ghost btn-block mb14" onclick="skipOwner()" style="font-size:13px">Skip → (no status saved)</button>
 
     <!-- ── RETRY ONCE BANNER (appears after voicemail/no-answer) ── -->
@@ -1067,9 +1200,9 @@ function renderCalling() {
       <div class="retry-banner" id="retry-banner">
         <div class="retry-banner-title">📬 Went to voicemail?</div>
         <div class="retry-banner-sub">You get one retry before moving on. Tap below to call again — the banner disappears after use.</div>
-        <a href="tel:${esc(owner.mobile)}" onclick="doRetry()" class="btn-retry">
+        <button onclick="doRetry()" class="btn-retry">
           🔄 Retry Call Once
-        </a>
+        </button>
       </div>` : (owner.retryUsed && ['voicemail','no_answer'].includes(owner.callStatus) ? `
       <div style="background:var(--g100);border-radius:var(--r8);padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--g500);font-weight:600">
         ✓ Retry used — mark final result below
@@ -1149,6 +1282,121 @@ function saveNote(field, val) {
   persist();
 }
 
+// ══════════════════════════════════════════════════════════════════
+// SAVE TO CONTACTS (vCard / .vcf)
+// On iPhone Safari, downloading a .vcf file triggers iOS to show
+// "Add Contact?" — no permissions or native APIs required.
+// ══════════════════════════════════════════════════════════════════
+
+function toTitleCase(str) {
+  // Converts "AHMAD MOHAMMED AL-RASHID" → "Ahmad Mohammed Al-Rashid"
+  return (str || '')
+    .toLowerCase()
+    .replace(/\b([a-z])/g, c => c.toUpperCase());
+}
+
+function vEscape(str) {
+  // Escape special chars for vCard 3.0 property values
+  return String(str || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '');
+}
+
+function saveContact() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+
+  const name      = toTitleCase(o.ownerName || 'Unknown Owner');
+  const nameParts = name.trim().split(/\s+/);
+  const firstName = nameParts[0] || '';
+  const lastName  = nameParts.slice(1).join(' ') || '';
+  const phone     = getCurrentPhone() || o.mobile || '';
+
+  // Build a clean notes block for the contact
+  const noteLines = [
+    o.country       ? `Country: ${o.country}`                 : '',
+    o.project       ? `Project: ${o.project}`                 : '',
+    o.buildingName  ? `Building: ${o.buildingName}`           : '',
+    o.unitNumber    ? `Unit Number: ${o.unitNumber}`          : '',
+    o.area          ? `Area: ${o.area}`                       : '',
+    o.size          ? `Size: ${o.size}`                       : '',
+    o.procedureValue? `Procedure Value: ${o.procedureValue}`  : '',
+    o.date          ? `Transaction Date: ${o.date}`           : '',
+  ].filter(Boolean);
+
+  // vCard NOTE field — lines joined with literal \n (vCard 3.0 line-break encoding)
+  const noteValue = noteLines.map(vEscape).join('\\n');
+
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${vEscape(name)}`,
+    `N:${vEscape(lastName)};${vEscape(firstName)};;;`,
+    phone ? `TEL;TYPE=CELL:${vEscape(phone)}` : null,
+    noteLines.length ? `NOTE:${noteValue}` : null,
+    'END:VCARD',
+  ].filter(l => l !== null).join('\r\n');
+
+  const blob = new Blob([lines], { type: 'text/vcard;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = name.replace(/\s+/g, '_') + '.vcf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`Contact ready — tap the file to add ${firstName} to iPhone Contacts`, 'ok');
+}
+
+// ── Phone Edit Helpers ───────────────────────────────────────────
+
+// Returns the current phone value from the editable field (falls back to owner.mobile)
+function getCurrentPhone() {
+  const inp = document.getElementById('phone-edit');
+  return inp ? inp.value.trim() : (curList()?.owners[S.ownerIdx]?.mobile || '');
+}
+
+// Called on every keystroke in the phone input — no save yet, just live
+function onPhoneEdit(val) {
+  // Nothing to do — callOwner() reads live from the input
+}
+
+// Save the edited number permanently to the owner record
+function saveEditedPhone() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  const val = getCurrentPhone();
+  if (!val) { toast('Enter a number first', 'err'); return; }
+  o.mobile = val;
+  persist();
+  toast('Number saved ✓', 'ok');
+}
+
+// Re-normalize the current number in the input using the owner's country
+function reNormalizePhone() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  const inp = document.getElementById('phone-edit');
+  if (!inp) return;
+  const normalized = normalizePhone(inp.value, o.country);
+  inp.value = normalized;
+  o.mobile = normalized;
+  persist();
+  toast('Re-normalized: ' + normalized, 'ok');
+}
+
+// Dial using the current phone input value
+function callOwner() {
+  const num = getCurrentPhone();
+  if (!num) { toast('No phone number', 'err'); return; }
+  recordAttempt();
+  window.location.href = 'tel:' + num;
+}
+
 // ── Retry Once ───────────────────────────────────────────────────
 function doRetry() {
   const list = curList(); if (!list) return;
@@ -1158,9 +1406,10 @@ function doRetry() {
   o.lastCalledAt= Date.now();
   o.callStatus  = null;  // Reset so user marks fresh result after retry
   persist();
-  // Re-render hides the retry banner and resets status buttons
   renderCalling();
-  // tel: link opens after re-render — iOS will handle it
+  // Dial using the current phone input value
+  const num = getCurrentPhone();
+  if (num) window.location.href = 'tel:' + num;
 }
 
 function recordAttempt() {
