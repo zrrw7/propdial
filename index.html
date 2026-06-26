@@ -624,37 +624,113 @@ function getDialCode(country) {
   if (!country) return null;
   const key = String(country).toLowerCase().trim().replace(/\.$/, '');
   if (DIAL_CODES[key] !== undefined) return DIAL_CODES[key];
-  // Partial / contains match
   for (const [k, v] of Object.entries(DIAL_CODES)) {
     if (key.includes(k) || k.includes(key)) return v;
   }
   return null;
 }
 
+// Unique dial code strings sorted longest-first so 357 matches before 35 or 3
+const SORTED_CODE_STRS = (() => {
+  const unique = [...new Set(Object.values(DIAL_CODES).map(String))];
+  return unique.sort((a, b) => b.length - a.length);
+})();
+
+// Per-country valid total digit lengths [min, max] (country code digits + national number digits).
+// A number must both START with the code AND have a length within this range to be accepted.
+// Example: '971' UAE requires 11–12 total digits — so "9715" (4 digits) is rejected
+// and falls through to the country-fallback instead.
+const CODE_LENGTH_RULES = {
+  // Gulf & Middle East
+  '971': [11, 12], '966': [12, 13], '965': [11, 11], '974': [11, 11],
+  '973': [11, 11], '968': [11, 12], '962': [11, 12], '961': [10, 11],
+  '20':  [11, 12], '964': [12, 13], '98':  [11, 12], '972': [11, 12],
+  '970': [11, 12], '963': [11, 12], '90':  [12, 12], '967': [12, 12],
+  '212': [11, 12], '213': [12, 12], '216': [11, 11], '218': [11, 12],
+  '249': [12, 12], '252': [11, 12],
+  // Europe
+  '1':   [11, 11], '7':   [11, 11], '44':  [12, 12], '33':  [11, 11],
+  '49':  [11, 13], '39':  [10, 12], '34':  [11, 11], '351': [12, 12],
+  '31':  [11, 11], '32':  [11, 11], '352': [10, 13], '41':  [11, 12],
+  '43':  [11, 13], '46':  [11, 12], '47':  [10, 11], '45':  [10, 10],
+  '358': [11, 12], '353': [11, 12], '354': [11, 11], '48':  [11, 11],
+  '380': [11, 12], '375': [12, 12], '30':  [12, 12], '357': [11, 11],
+  '356': [11, 11], '36':  [11, 12], '40':  [11, 11], '359': [11, 12],
+  '420': [12, 12], '421': [12, 12], '386': [11, 11], '385': [11, 12],
+  '381': [11, 12], '370': [11, 11], '371': [11, 11], '372': [10, 11],
+  '373': [11, 11], '355': [11, 12], '389': [11, 11], '377': [10, 11],
+  // Asia Pacific
+  '91':  [12, 12], '92':  [12, 12], '880': [12, 13], '94':  [11, 11],
+  '977': [12, 12], '93':  [12, 12], '86':  [13, 13], '81':  [11, 12],
+  '82':  [11, 12], '63':  [12, 12], '62':  [11, 13], '60':  [10, 12],
+  '65':  [10, 10], '66':  [11, 11], '84':  [11, 12], '95':  [11, 12],
+  '855': [11, 11], '856': [11, 12], '852': [11, 11], '886': [11, 12],
+  '853': [11, 11], '976': [11, 11], '998': [12, 12],
+  // Oceania
+  '61':  [11, 11], '64':  [10, 12], '679': [10, 10],
+  // Americas
+  '52':  [12, 12], '55':  [12, 13], '54':  [12, 13], '57':  [12, 12],
+  '56':  [11, 11], '51':  [11, 12], '58':  [11, 11], '507': [11, 11],
+  '506': [11, 11], '502': [12, 12], '504': [12, 12], '503': [11, 11],
+  '505': [11, 11], '53':  [10, 11],
+  // Africa
+  '27':  [11, 11], '234': [13, 14], '254': [12, 12], '251': [12, 12],
+  '233': [12, 12], '255': [12, 12], '256': [12, 12], '250': [12, 12],
+  '221': [12, 12], '237': [12, 12], '244': [12, 12], '260': [12, 12],
+  '263': [12, 13], '267': [11, 11], '264': [12, 12],
+};
+
+// Returns the matched dial code string if `digits` begins with a known country
+// code AND the total digit count falls within that country's valid range.
+// Returns null if the number is too short, too long, or unrecognised — so the
+// caller can fall back to the contact's Country field instead.
+function detectCodeInNumber(digits) {
+  for (const code of SORTED_CODE_STRS) {
+    if (!digits.startsWith(code)) continue;
+    const rule = CODE_LENGTH_RULES[code];
+    if (rule) {
+      const [min, max] = rule;
+      if (digits.length >= min && digits.length <= max) return code;
+      // Prefix matched but length is wrong — number is too short/long for this
+      // country. Stop here; don't let a shorter code (e.g. '97' or '9') match
+      // the same prefix and produce a nonsense result.
+      if (digits.length < min) return null;
+    } else {
+      // Code not in length map — conservative generic guard
+      const minLen = code.length <= 2 ? 11 : code.length + 7;
+      if (digits.length >= minLen) return code;
+    }
+  }
+  return null;
+}
+
 function normalizePhone(raw, country) {
   if (!raw) return '';
-  // Strip spaces, dashes, dots, parentheses, slashes
-  let num = String(raw).replace(/[\s\-\.\(\)\/\\]/g, '');
-  // Keep only digits and leading +
-  num = num.replace(/[^\d+]/g, '');
+  // Strip formatting — keep only digits and a leading +
+  let num = String(raw).replace(/[\s\-\.\(\)\/\\]/g, '').replace(/[^\d+]/g, '');
   if (!num) return '';
 
-  // Already international format — return as-is
+  // Already in international format
   if (num.startsWith('+')) return num;
 
-  // 00XXXX → +XXXX
+  // 00XXXX → +XXXX (international dial prefix)
   if (num.startsWith('00')) return '+' + num.slice(2);
 
-  const code = getDialCode(country);
-  if (!code) return num; // Unknown country — return cleaned digits
+  // Strip a single leading trunk zero (e.g. 0971… or 07911…)
+  const stripped = num.startsWith('0') ? num.slice(1) : num;
 
-  const codeStr = String(code);
-  // Strip leading zeros (local format e.g. 0XXXXXXXXX)
-  const stripped = num.replace(/^0+/, '');
-  // Already has country code digits prepended
-  if (stripped.startsWith(codeStr)) return '+' + stripped;
-  // Prepend country code
-  return '+' + codeStr + stripped;
+  // ── Step 1: detect if the number itself already contains a country code ──
+  // The contact's Country field is NOT consulted here.
+  // Example: country=Cyprus but number starts with 971 → returns +971…
+  const detected = detectCodeInNumber(stripped);
+  if (detected) return '+' + stripped;
+
+  // ── Step 2: fallback — use the contact's Country field ──
+  // Only reached when no known code was found in the number itself.
+  const dialCode = getDialCode(country);
+  if (!dialCode) return stripped; // Unknown country — return cleaned digits
+
+  return '+' + String(dialCode) + stripped;
 }
 
 // ══════════════════════════════════════════════════════════════════
