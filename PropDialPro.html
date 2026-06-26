@@ -478,6 +478,38 @@ a{color:inherit;text-decoration:none}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .admin-cred-value.unset{color:var(--g400);font-weight:500;font-style:italic}
+
+/* Assign dropdown */
+.assign-dropdown{
+  position:relative;margin-top:10px;padding-top:10px;border-top:1px solid var(--g100);
+}
+.assign-search{
+  width:100%;padding:9px 11px;border:1.5px solid var(--g200);border-radius:var(--r8);
+  font-size:14px;font-family:var(--font);color:var(--g900);transition:border-color .15s;
+}
+.assign-search:focus{border-color:var(--p)}
+.assign-results{
+  background:var(--white);border:1.5px solid var(--p);border-radius:var(--r8);
+  margin-top:4px;overflow:hidden;box-shadow:var(--sh2);
+}
+.assign-option{
+  display:flex;align-items:center;gap:10px;padding:10px 12px;
+  cursor:pointer;transition:background .1s;border-bottom:1px solid var(--g100);
+}
+.assign-option:last-child{border-bottom:none}
+.assign-option:active{background:var(--p-xlight)}
+.assign-option-name{font-size:14px;font-weight:800;color:var(--g900)}
+.assign-option-email{font-size:11px;color:var(--g500);font-weight:500}
+.assign-none{padding:10px 12px;font-size:13px;color:var(--g400);font-weight:600;text-align:center}
+
+/* Assigned user badge on list card */
+.list-assigned-badge{
+  display:flex;align-items:center;gap:7px;
+  padding:5px 10px 5px 5px;
+  background:var(--p-xlight);border:1px solid var(--p-light);
+  border-radius:999px;margin-bottom:8px;width:fit-content;
+}
+.list-assigned-name{font-size:12px;font-weight:800;color:var(--p-dark)}
 .owner-card-badges{display:flex;gap:6px;flex-wrap:wrap}
 .bdg{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:.2px}
 .bdg-white {background:rgba(255,255,255,.18);color:#fff}
@@ -2001,9 +2033,54 @@ function renderCallbacks() {
 // PROFILE & ADMIN SYSTEM
 // ══════════════════════════════════════════════════════════════════
 
-const PROFILE_KEY = 'PROPDIAL_PROFILE';
-const TICKETS_KEY = 'PROPDIAL_TICKETS';
-const ADMIN_HASH_KEY = 'PROPDIAL_ADMIN_HASH';
+const PROFILE_KEY   = 'PROPDIAL_PROFILE';
+const TICKETS_KEY   = 'PROPDIAL_TICKETS';
+const ADMIN_HASH_KEY= 'PROPDIAL_ADMIN_HASH';
+const USERS_KEY     = 'PROPDIAL_USERS'; // local registry of all profiles ever saved
+
+// ── User Registry ────────────────────────────────────────────────
+// Each entry: { id, name, email, photo, joinedAt }
+// Auto-updated whenever a profile is saved on this device.
+// In a future backend version, this is replaced by a real user table.
+
+function loadUsers() {
+  try { return JSON.parse(localStorage.getItem(USERS_KEY) || '[]'); } catch { return []; }
+}
+function saveUsers(users) { localStorage.setItem(USERS_KEY, JSON.stringify(users)); }
+
+function registerUser(prof) {
+  if (!prof.name && !prof.email) return; // nothing worth registering
+  const users = loadUsers();
+  const existing = users.find(u => u.id === prof.id);
+  if (existing) {
+    // Update in place
+    Object.assign(existing, {
+      name: prof.name || existing.name,
+      email: prof.email || existing.email,
+      photo: prof.photo || existing.photo,
+    });
+  } else {
+    users.push({
+      id:       prof.id || ('usr-' + Date.now()),
+      name:     prof.name  || '',
+      email:    prof.email || '',
+      photo:    prof.photo || null,
+      joinedAt: prof.joinedAt || new Date().toISOString(),
+    });
+  }
+  saveUsers(users);
+}
+
+function userAvatar(user, size = 32) {
+  const s = size + 'px';
+  if (user && user.photo) {
+    return `<img src="${user.photo}" style="width:${s};height:${s};border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--p-light)">`;
+  }
+  const initial = user && user.name ? esc(user.name.charAt(0).toUpperCase()) : '?';
+  return `<div style="width:${s};height:${s};border-radius:50%;background:var(--p-xlight);color:var(--p);
+    display:flex;align-items:center;justify-content:center;font-size:${Math.round(size*.45)}px;
+    font-weight:900;flex-shrink:0;border:2px solid var(--p-light)">${initial}</div>`;
+}
 
 function loadProfile() {
   try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}'); } catch { return {}; }
@@ -2029,8 +2106,10 @@ function pickProfilePhoto() {
     const file = e.target.files[0]; if (!file) return;
     const reader = new FileReader();
     reader.onload = ev => {
-      const p = loadProfile(); p.photo = ev.target.result;
-      saveProfileData(p); renderProfile(); toast('Photo updated ✓','ok');
+      const p = loadProfile();
+      if (!p.id) p.id = 'usr-' + Date.now();
+      p.photo = ev.target.result;
+      saveProfileData(p); registerUser(p); renderProfile(); toast('Photo updated ✓','ok');
     };
     reader.readAsDataURL(file);
   };
@@ -2046,8 +2125,13 @@ function toggleProfSection(s) {
 }
 
 function saveProfFields(fields) {
-  const p = loadProfile(); Object.assign(p, fields);
-  saveProfileData(p); _profSection = null; renderProfile(); toast('Saved ✓','ok');
+  const p = loadProfile();
+  if (!p.id) p.id = 'usr-' + Date.now(); // stable ID for this user
+  if (!p.joinedAt) p.joinedAt = new Date().toISOString();
+  Object.assign(p, fields);
+  saveProfileData(p);
+  registerUser(p); // keep local user registry in sync
+  _profSection = null; renderProfile(); toast('Saved ✓','ok');
 }
 
 async function changeProfPassword() {
@@ -2407,6 +2491,31 @@ function adminUploadList() {
   document.getElementById('file-inp').click();
 }
 
+// Live-search dropdown — called oninput on the assign search box
+function adminFilterUsers(listId, query) {
+  const results = document.getElementById('assign-results-' + listId);
+  if (!results) return;
+  const users = loadUsers();
+  const q = query.toLowerCase().trim();
+  const matches = q ? users.filter(u =>
+    (u.name||'').toLowerCase().includes(q) ||
+    (u.email||'').toLowerCase().includes(q)
+  ) : users;
+
+  if (matches.length === 0) {
+    results.innerHTML = `<div class="assign-none">No registered users found</div>`;
+    return;
+  }
+  results.innerHTML = matches.map(u => `
+    <div class="assign-option" onclick="adminSetAssignment('${listId}','${u.id}')">
+      ${userAvatar(u, 34)}
+      <div>
+        <div class="assign-option-name">${esc(u.name||'(No name)')}</div>
+        <div class="assign-option-email">${esc(u.email||'')}</div>
+      </div>
+    </div>`).join('');
+}
+
 function adminViewList(listId) {
   _adminViewList = listId; _profSection = 'all'; renderProfile();
 }
@@ -2415,11 +2524,35 @@ function adminCloseListDetail() {
   _adminViewList = null; _profSection = null; renderProfile();
 }
 
-function adminSetAssignment(listId, userName) {
+function adminSetAssignment(listId, userId) {
   const list = getList(listId); if (!list) return;
-  list.assignedTo = userName.trim() || null;
+  if (!userId) {
+    list.assignedTo = null; list.assignedToId = null; list.assignedToPhoto = null;
+  } else {
+    const user = loadUsers().find(u => u.id === userId);
+    if (!user) return;
+    list.assignedTo      = user.name || user.email;
+    list.assignedToId    = user.id;
+    list.assignedToPhoto = user.photo || null;
+  }
   persist(); _profSection = null; renderProfile();
-  toast('Assigned to ' + (userName.trim() || 'nobody'), 'ok');
+  toast(userId ? 'Assigned to ' + (list.assignedTo) : 'Assignment removed', 'ok');
+}
+
+// Assigns via a typed name string — fallback for manual entry
+function adminSetAssignmentByName(listId, name) {
+  const list = getList(listId); if (!list) return;
+  const trimmed = name.trim();
+  const matched = loadUsers().find(u => u.name === trimmed || u.email === trimmed);
+  if (matched) {
+    adminSetAssignment(listId, matched.id);
+  } else if (trimmed) {
+    list.assignedTo = trimmed; list.assignedToId = null; list.assignedToPhoto = null;
+    persist(); _profSection = null; renderProfile();
+    toast('Assigned to ' + trimmed + ' (unregistered)', 'ok');
+  } else {
+    adminSetAssignment(listId, null);
+  }
 }
 
 function adminRemoveList(listId) {
@@ -2590,15 +2723,31 @@ function renderAdminPanel(el) {
                   font-size:10px;font-weight:800;padding:2px 9px;border-radius:999px">${lists.length} list${lists.length!==1?'s':''}</span>
               </div>
               ${lists.map(list => {
-                const total  = list.owners.length;
-                const called = list.owners.filter(o=>o.attempts>0).length;
-                const conn   = list.owners.filter(o=>o.callStatus==='connected').length;
-                const cbs    = list.owners.filter(o=>o.callbackDate).length;
-                const pct    = total ? Math.round(called/total*100) : 0;
+                const total    = list.owners.length;
+                const called   = list.owners.filter(o=>o.attempts>0).length;
+                const conn     = list.owners.filter(o=>o.callStatus==='connected').length;
+                const cbs      = list.owners.filter(o=>o.callbackDate).length;
+                const pct      = total ? Math.round(called/total*100) : 0;
                 const isAssigning = _profSection === 'assign-'+list.id;
+                const assignedUser = list.assignedToId
+                  ? loadUsers().find(u => u.id === list.assignedToId) || null
+                  : null;
                 return `
                   <div style="background:var(--white);border:1px solid var(--g200);border-radius:var(--r12);
                     padding:14px;margin-bottom:8px;box-shadow:var(--sh1)">
+
+                    <!-- Assigned user badge -->
+                    ${assignedUser ? `
+                      <div class="list-assigned-badge">
+                        ${userAvatar(assignedUser, 24)}
+                        <span class="list-assigned-name">${esc(assignedUser.name||assignedUser.email)}</span>
+                      </div>` :
+                      list.assignedTo ? `
+                      <div class="list-assigned-badge" style="background:var(--g100);border-color:var(--g200)">
+                        <div style="width:24px;height:24px;border-radius:50%;background:var(--g300);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:var(--g600)">?</div>
+                        <span class="list-assigned-name" style="color:var(--g600)">${esc(list.assignedTo)}</span>
+                      </div>` : ''}
+
                     <div style="font-size:15px;font-weight:900;color:var(--g900);margin-bottom:2px">${esc(list.name)}</div>
                     <div style="font-size:11px;color:var(--g500);font-weight:600;margin-bottom:10px">
                       ${total} contacts · ${called} called · ${conn} connected · ${cbs} callbacks
@@ -2612,16 +2761,28 @@ function renderAdminPanel(el) {
                       <button class="admin-act-btn blue" onclick="toggleProfSection('assign-${list.id}')">👤 ${list.assignedTo?'Reassign':'Assign'}</button>
                       <button class="admin-act-btn red" onclick="adminRemoveList('${list.id}')">🗑 Remove</button>
                     </div>
-                    ${isAssigning?`
-                      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--g100)">
-                        <div style="font-size:10px;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Assign to user</div>
-                        <div style="display:flex;gap:6px">
-                          <input id="asgn-${list.id}" type="text" value="${esc(list.assignedTo||'')}"
-                            placeholder="Type user name…"
-                            style="flex:1;padding:9px 11px;border:1.5px solid var(--g200);border-radius:var(--r8);font-size:14px;font-family:var(--font)">
-                          <button class="admin-act-btn green" onclick="adminSetAssignment('${list.id}',document.getElementById('asgn-${list.id}').value)">Save</button>
+
+                    <!-- Live-search assign dropdown -->
+                    ${isAssigning ? `
+                      <div class="assign-dropdown">
+                        <div style="font-size:10px;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px">Assign to user</div>
+                        <input class="assign-search" type="text" placeholder="Search by name or email…"
+                          oninput="adminFilterUsers('${list.id}',this.value)"
+                          onfocus="adminFilterUsers('${list.id}',this.value)">
+                        <div class="assign-results" id="assign-results-${list.id}">
+                          ${loadUsers().length === 0
+                            ? `<div class="assign-none">No registered users yet — users appear here after they save their profile</div>`
+                            : loadUsers().map(u => `
+                              <div class="assign-option" onclick="adminSetAssignment('${list.id}','${u.id}')">
+                                ${userAvatar(u, 34)}
+                                <div>
+                                  <div class="assign-option-name">${esc(u.name||'(No name)')}</div>
+                                  <div class="assign-option-email">${esc(u.email||'')}</div>
+                                </div>
+                                ${list.assignedToId===u.id?'<span style="margin-left:auto;font-size:11px;color:var(--p);font-weight:800">✓ Assigned</span>':''}
+                              </div>`).join('')}
                         </div>
-                        ${list.assignedTo?`<button style="margin-top:6px;font-size:11px;color:var(--red);font-weight:700;background:none;border:none;padding:0" onclick="adminSetAssignment('${list.id}','')">Remove assignment</button>`:''}
+                        ${list.assignedTo ? `<button style="margin-top:8px;font-size:11px;color:var(--red);font-weight:700;background:none;border:none;padding:0" onclick="adminSetAssignment('${list.id}','')">✕ Remove assignment</button>` : ''}
                       </div>` : ''}
                   </div>`;
               }).join('')}
