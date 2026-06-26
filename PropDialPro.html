@@ -109,7 +109,7 @@ a{color:inherit;text-decoration:none}
   background:#fff;
   display:flex;flex-direction:column;
   /* Black home-indicator strip below the nav pill */
-  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 8px);
+  padding-bottom:calc(env(safe-area-inset-bottom,0px) + 18px);
   border-top:1px solid var(--g200);
   box-shadow:0 -4px 24px rgba(0,0,0,.07);
 }
@@ -2383,7 +2383,7 @@ function renderProfile() {
               <button class="prof-btn-cancel" style="background:rgba(255,255,255,.08);color:#fff" onclick="toggleProfSection('adminlogin')">Cancel</button>
             </div>
             <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:10px;text-align:center">
-              Default password: PropDial@Admin2024<br>Change it after first login.
+              Contact propdialsupport@gmail.com if you need access.
             </div>
           </div>` : ''}
       </div>
@@ -2392,180 +2392,278 @@ function renderProfile() {
     <div style="height:100px"></div>`;
 }
 
+// ── Admin panel state & helpers ──────────────────────────────────
+
+let _adminViewList = null; // list ID open in detail view
+
+const PD_LOGO_SVG = `<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" width="86" height="86" style="display:block;margin:0 auto 14px;filter:drop-shadow(0 4px 12px rgba(0,0,0,.3))">
+  <circle cx="50" cy="50" r="49" fill="#ffffff" stroke="rgba(255,255,255,.15)" stroke-width="1.5"/>
+  <text x="13" y="70" font-family="-apple-system,Arial Black,sans-serif" font-weight="900" font-size="56" fill="#111827">P</text>
+  <text x="53" y="70" font-family="-apple-system,Arial Black,sans-serif" font-weight="900" font-size="56" fill="#7C3AED">D</text>
+  <text x="50" y="86" font-family="-apple-system,Arial,sans-serif" font-weight="800" font-size="11" fill="#B45309" text-anchor="middle" letter-spacing="3">ADMIN</text>
+</svg>`;
+
+function adminUploadList() {
+  document.getElementById('file-inp').click();
+}
+
+function adminViewList(listId) {
+  _adminViewList = listId; _profSection = 'all'; renderProfile();
+}
+
+function adminCloseListDetail() {
+  _adminViewList = null; _profSection = null; renderProfile();
+}
+
+function adminSetAssignment(listId, userName) {
+  const list = getList(listId); if (!list) return;
+  list.assignedTo = userName.trim() || null;
+  persist(); _profSection = null; renderProfile();
+  toast('Assigned to ' + (userName.trim() || 'nobody'), 'ok');
+}
+
+function adminRemoveList(listId) {
+  if (!confirm('Permanently remove this list? This cannot be undone.')) return;
+  S.lists = S.lists.filter(l => l.id !== listId);
+  persist(); renderProfile(); toast('List removed', 'ok');
+}
+
+function renderAdminListDetail(el, listId) {
+  const list = getList(listId);
+  if (!list) { _adminViewList = null; renderProfile(); return; }
+
+  const owners   = list.owners;
+  const called   = owners.filter(o => o.attempts > 0);
+  const uncalled = owners.filter(o => !o.attempts || o.attempts === 0);
+  const connected= owners.filter(o => o.callStatus === 'connected');
+  const voicemail= owners.filter(o => o.callStatus === 'voicemail');
+  const callbacks= owners.filter(o => o.callbackDate);
+  const dnc      = owners.filter(o => o.doNotCall);
+  const agents   = owners.filter(o => o.agent);
+  const withNotes= owners.filter(o => o.note_call||o.note_callback||o.note_selling||o.note_buying);
+  const pct      = owners.length ? Math.round(called.length/owners.length*100) : 0;
+
+  const tab = (_profSection && ['all','called','uncalled','callbacks','notes'].includes(_profSection))
+    ? _profSection : 'all';
+  const tabRows = {all:owners, called, uncalled, callbacks, notes:withNotes}[tab];
+
+  const scMap = {connected:'var(--green)',voicemail:'var(--amber)',no_answer:'var(--g400)',invalid:'var(--red)',switched_off:'var(--red)',closed:'var(--g700)'};
+
+  el.innerHTML = `
+    <div style="display:flex;align-items:center;gap:10px;padding:16px 0 12px">
+      <button onclick="adminCloseListDetail()" style="width:36px;height:36px;border-radius:50%;background:var(--g100);display:flex;align-items:center;justify-content:center;font-size:18px;color:var(--g700);flex-shrink:0;border:none">←</button>
+      <div>
+        <div style="font-size:18px;font-weight:900;color:var(--g900)">${esc(list.name)}</div>
+        <div style="font-size:12px;color:var(--g500);font-weight:600">${list.assignedTo?'Assigned to: '+esc(list.assignedTo):'Unassigned'}</div>
+      </div>
+    </div>
+
+    <!-- Progress overview -->
+    <div style="background:var(--white);border:1px solid var(--g200);border-radius:var(--r12);padding:14px;margin-bottom:14px;box-shadow:var(--sh1)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:800;color:var(--g700)">Progress</div>
+        <div style="font-size:13px;font-weight:900;color:var(--p)">${pct}% called</div>
+      </div>
+      <div style="height:8px;background:var(--g100);border-radius:4px;overflow:hidden;margin-bottom:14px">
+        <div style="height:100%;width:${pct}%;background:var(--p);border-radius:4px"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center">
+        <div><div style="font-size:22px;font-weight:900;color:var(--g900)">${owners.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">Total</div></div>
+        <div><div style="font-size:22px;font-weight:900;color:var(--green)">${called.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">Called</div></div>
+        <div><div style="font-size:22px;font-weight:900;color:var(--g400)">${uncalled.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">Uncalled</div></div>
+        <div><div style="font-size:22px;font-weight:900;color:var(--blue)">${callbacks.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">Callbacks</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--g100)">
+        <div><div style="font-size:22px;font-weight:900;color:var(--p)">${connected.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">Connected</div></div>
+        <div><div style="font-size:22px;font-weight:900;color:var(--amber)">${voicemail.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">Voicemail</div></div>
+        <div><div style="font-size:22px;font-weight:900;color:var(--red)">${dnc.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">DNC</div></div>
+        <div><div style="font-size:22px;font-weight:900;color:var(--blue)">${agents.length}</div><div style="font-size:9px;color:var(--g500);font-weight:800;text-transform:uppercase">Agents</div></div>
+      </div>
+    </div>
+
+    <!-- Filter tabs -->
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:12px;scrollbar-width:none;-webkit-overflow-scrolling:touch">
+      ${[['all','All',owners.length],['called','Called',called.length],['uncalled','Uncalled',uncalled.length],['callbacks','Callbacks',callbacks.length],['notes','Notes',withNotes.length]]
+        .map(([k,label,count])=>`
+          <button onclick="_profSection='${k}';_adminViewList='${list.id}';renderProfile()"
+            style="flex-shrink:0;padding:7px 14px;border-radius:20px;font-size:12px;font-weight:800;border:none;white-space:nowrap;
+            background:${tab===k?'var(--p)':'var(--g100)'};color:${tab===k?'#fff':'var(--g700)'}">
+            ${label} (${count})
+          </button>`).join('')}
+    </div>
+
+    <!-- Contact rows -->
+    <div style="display:flex;flex-direction:column;gap:8px">
+      ${tabRows.length===0
+        ? `<div style="text-align:center;padding:40px;color:var(--g400);font-weight:600;background:var(--g50);border-radius:var(--r12)">No contacts in this view</div>`
+        : tabRows.map(o => {
+          const sc = scMap[o.callStatus] || 'var(--g200)';
+          return `
+            <div style="background:var(--white);border:1px solid var(--g200);border-radius:var(--r12);padding:14px;box-shadow:var(--sh1);border-left:4px solid ${sc}">
+              <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+                <div>
+                  <div style="font-size:15px;font-weight:800;color:var(--g900)">${esc(o.ownerName)||'(No Name)'}</div>
+                  <div style="font-size:12px;color:var(--g500);font-weight:600;margin-top:1px">${esc(getOwnerPhones(o)[0]||o.mobile||'—')}</div>
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0">
+                  ${o.callStatus?`<span style="font-size:10px;font-weight:900;color:${sc};text-transform:uppercase;letter-spacing:.5px">${o.callStatus.replace(/_/g,' ')}</span>`:''}
+                  ${o.leadCategory?`<span style="font-size:10px;font-weight:900;color:var(--p);text-transform:uppercase">${o.leadCategory.replace(/_/g,' ')}</span>`:''}
+                  ${o.doNotCall?`<span style="font-size:10px;font-weight:800;color:var(--red)">⛔ DNC</span>`:''}
+                  ${o.agent?`<span style="font-size:10px;font-weight:800;color:var(--blue)">🧑‍💼 Agent</span>`:''}
+                </div>
+              </div>
+              ${o.callbackDate?`<div style="font-size:12px;color:var(--blue);font-weight:700;margin-bottom:6px">📅 Callback: ${o.callbackDate}${o.callbackTime?' at '+o.callbackTime:''}</div>`:''}
+              ${o.note_call?`<div style="font-size:12px;color:var(--g700);background:var(--g50);border-radius:6px;padding:8px;margin-top:4px"><div style="font-size:9px;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Call Notes</div>${esc(o.note_call)}</div>`:''}
+              ${o.note_callback?`<div style="font-size:12px;color:var(--g700);background:var(--blue-l);border-radius:6px;padding:8px;margin-top:4px"><div style="font-size:9px;font-weight:800;color:var(--blue);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Callback Notes</div>${esc(o.note_callback)}</div>`:''}
+              ${o.note_selling?`<div style="font-size:12px;color:var(--g700);background:var(--green-l);border-radius:6px;padding:8px;margin-top:4px"><div style="font-size:9px;font-weight:800;color:var(--green);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Selling Details</div>${esc(o.note_selling)}</div>`:''}
+              ${o.note_buying?`<div style="font-size:12px;color:var(--g700);background:var(--p-xlight);border-radius:6px;padding:8px;margin-top:4px"><div style="font-size:9px;font-weight:800;color:var(--p);text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px">Buying Requirements</div>${esc(o.note_buying)}</div>`:''}
+              ${o.attempts?`<div style="font-size:11px;color:var(--g400);font-weight:600;margin-top:8px">${o.attempts} attempt${o.attempts!==1?'s':''}${o.lastCalledAt?' · Last: '+fmtDate(o.lastCalledAt):''}</div>`:''}
+            </div>`;
+        }).join('')}
+    </div>
+    <div style="height:100px"></div>`;
+}
+
 // ── Admin panel renderer ─────────────────────────────────────────
 
 function renderAdminPanel(el) {
-  const prof    = loadProfile();
-  const tickets = loadTickets();
-  const totalOwners  = S.lists.reduce((a,l)=>a+l.owners.length,0);
-  const totalCalled  = S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.attempts>0).length,0);
-  const totalConn    = S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callStatus==='connected').length,0);
-  const openTickets  = tickets.filter(t=>t.status==='open').length;
+  if (_adminViewList) { renderAdminListDetail(el, _adminViewList); return; }
 
-  // Build user list — currently 1 user per device (localStorage).
-  // When a backend is connected, this array will be fetched from the server.
+  const tickets     = loadTickets();
+  const openTickets = tickets.filter(t=>t.status==='open').length;
+  const prof        = loadProfile();
+  if (!prof.joinedAt) { prof.joinedAt = new Date().toISOString(); saveProfileData(prof); }
+
   const users = [{
-    id: 'usr-local',
-    name:  prof.name  || null,
-    email: prof.email || null,
-    phone: prof.phone || null,
-    photo: prof.photo || null,
-    passwordSet: !!prof.passwordHash,
-    joinedAt: prof.joinedAt || null,
-    lists: S.lists.length,
-    callsMade: totalCalled,
-    device: 'This device',
+    name: prof.name||null, email: prof.email||null,
+    photo: prof.photo||null, passwordSet: !!prof.passwordHash,
+    joinedAt: prof.joinedAt||null, lists: S.lists.length,
   }];
 
-  // Store joinedAt on first admin view if not already set
-  if (!prof.joinedAt) {
-    prof.joinedAt = new Date().toISOString();
-    saveProfileData(prof);
-  }
+  // Group lists by assignedTo
+  const grouped = {};
+  S.lists.forEach(list => {
+    const key = list.assignedTo || '___none___';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(list);
+  });
+  const groupKeys = Object.keys(grouped).sort((a,b)=> a==='___none___'?1:-1);
 
   el.innerHTML = `
-    <!-- Admin hero -->
+    <!-- Hero -->
     <div class="admin-hero">
-      <div class="admin-chip">⚡ Admin Mode</div>
-      <div class="admin-title">PropDial Control Panel</div>
-      <div class="admin-sub">Private owner dashboard — not visible to users</div>
+      ${PD_LOGO_SVG}
+      <div class="admin-title">Prop Dial Admin</div>
+      <div class="admin-sub">propdialsupport@gmail.com</div>
       <div class="admin-stats">
         <div class="admin-stat"><div class="admin-stat-n">${users.length}</div><div class="admin-stat-l">Users</div></div>
-        <div class="admin-stat"><div class="admin-stat-n">${totalOwners}</div><div class="admin-stat-l">Total Owners</div></div>
-        <div class="admin-stat"><div class="admin-stat-n">${totalCalled}</div><div class="admin-stat-l">Calls Made</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${S.lists.length}</div><div class="admin-stat-l">Data Lists</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${S.lists.reduce((a,l)=>a+l.owners.length,0)}</div><div class="admin-stat-l">Contacts</div></div>
         <div class="admin-stat"><div class="admin-stat-n">${openTickets}</div><div class="admin-stat-l">Open Tickets</div></div>
       </div>
     </div>
 
-    <!-- Users section -->
+    <!-- Data Management -->
     <div class="admin-section">
-      <div class="admin-section-label">Users — ${users.length} registered</div>
+      <div class="admin-section-label">Data Management</div>
+      <button onclick="adminUploadList()" style="
+        display:flex;align-items:center;justify-content:center;gap:10px;
+        width:100%;padding:15px;margin-bottom:14px;border-radius:var(--r12);
+        background:linear-gradient(135deg,var(--p-dark),var(--p));color:#fff;
+        font-size:15px;font-weight:800;box-shadow:var(--shp);border:none">
+        ＋ Upload New Data List
+      </button>
+
+      ${S.lists.length===0
+        ? `<div style="text-align:center;padding:32px;color:var(--g400);font-weight:600;background:var(--g50);border-radius:var(--r12)">No data lists uploaded yet</div>`
+        : groupKeys.map(key => {
+          const lists   = grouped[key];
+          const label   = key==='___none___' ? 'Unassigned' : key;
+          return `
+            <div style="margin-bottom:18px">
+              <div style="display:flex;align-items:center;gap:8px;padding:7px 12px;
+                background:${key==='___none___'?'var(--g100)':'linear-gradient(90deg,var(--p-xlight),var(--p-light))'};
+                border-radius:var(--r8);margin-bottom:8px">
+                <span style="font-size:15px">${key==='___none___'?'📂':'👤'}</span>
+                <span style="font-size:13px;font-weight:900;color:${key==='___none___'?'var(--g500)':'var(--p-dark)'}">${esc(label)}</span>
+                <span style="margin-left:auto;background:${key==='___none___'?'var(--g400)':'var(--p)'};color:#fff;
+                  font-size:10px;font-weight:800;padding:2px 9px;border-radius:999px">${lists.length} list${lists.length!==1?'s':''}</span>
+              </div>
+              ${lists.map(list => {
+                const total  = list.owners.length;
+                const called = list.owners.filter(o=>o.attempts>0).length;
+                const conn   = list.owners.filter(o=>o.callStatus==='connected').length;
+                const cbs    = list.owners.filter(o=>o.callbackDate).length;
+                const pct    = total ? Math.round(called/total*100) : 0;
+                const isAssigning = _profSection === 'assign-'+list.id;
+                return `
+                  <div style="background:var(--white);border:1px solid var(--g200);border-radius:var(--r12);
+                    padding:14px;margin-bottom:8px;box-shadow:var(--sh1)">
+                    <div style="font-size:15px;font-weight:900;color:var(--g900);margin-bottom:2px">${esc(list.name)}</div>
+                    <div style="font-size:11px;color:var(--g500);font-weight:600;margin-bottom:10px">
+                      ${total} contacts · ${called} called · ${conn} connected · ${cbs} callbacks
+                    </div>
+                    <div style="height:6px;background:var(--g100);border-radius:3px;overflow:hidden;margin-bottom:3px">
+                      <div style="height:100%;width:${pct}%;background:var(--p);border-radius:3px"></div>
+                    </div>
+                    <div style="font-size:10px;color:var(--g400);font-weight:700;margin-bottom:10px">${pct}% called</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      <button class="admin-act-btn green" onclick="adminViewList('${list.id}')">📊 View Progress</button>
+                      <button class="admin-act-btn blue" onclick="toggleProfSection('assign-${list.id}')">👤 ${list.assignedTo?'Reassign':'Assign'}</button>
+                      <button class="admin-act-btn red" onclick="adminRemoveList('${list.id}')">🗑 Remove</button>
+                    </div>
+                    ${isAssigning?`
+                      <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--g100)">
+                        <div style="font-size:10px;font-weight:800;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Assign to user</div>
+                        <div style="display:flex;gap:6px">
+                          <input id="asgn-${list.id}" type="text" value="${esc(list.assignedTo||'')}"
+                            placeholder="Type user name…"
+                            style="flex:1;padding:9px 11px;border:1.5px solid var(--g200);border-radius:var(--r8);font-size:14px;font-family:var(--font)">
+                          <button class="admin-act-btn green" onclick="adminSetAssignment('${list.id}',document.getElementById('asgn-${list.id}').value)">Save</button>
+                        </div>
+                        ${list.assignedTo?`<button style="margin-top:6px;font-size:11px;color:var(--red);font-weight:700;background:none;border:none;padding:0" onclick="adminSetAssignment('${list.id}','')">Remove assignment</button>`:''}
+                      </div>` : ''}
+                  </div>`;
+              }).join('')}
+            </div>`;
+        }).join('')}
+    </div>
+
+    <!-- Users -->
+    <div class="admin-section">
+      <div class="admin-section-label">Users — ${users.length} on this device</div>
       ${users.map((u,i) => `
         <div class="admin-user-card">
-          <!-- User header -->
           <div class="admin-user-head">
             <div class="admin-user-av">
-              ${u.photo
-                ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
-                : `<span>${u.name ? esc(u.name.charAt(0).toUpperCase()) : '?'}</span>`}
+              ${u.photo?`<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+                :`<span>${u.name?esc(u.name.charAt(0).toUpperCase()):'?'}</span>`}
             </div>
             <div class="admin-user-meta">
               <div class="admin-user-name">${esc(u.name||'No name set')}</div>
-              <div class="admin-user-id">User #${i+1} · ${esc(u.device)}</div>
+              <div class="admin-user-id">User #${i+1} · ${u.lists} list${u.lists!==1?'s':''}</div>
             </div>
-            <div class="admin-user-status ${u.name&&u.email?'active':'incomplete'}">
-              ${u.name&&u.email?'Active':'Incomplete'}
-            </div>
+            <div class="admin-user-status ${u.name&&u.email?'active':'incomplete'}">${u.name&&u.email?'Active':'Incomplete'}</div>
           </div>
-          <!-- Credentials table -->
           <div class="admin-cred-table">
-            <div class="admin-cred-row">
-              <div class="admin-cred-label">Full Name</div>
-              <div class="admin-cred-value ${!u.name?'unset':''}">${esc(u.name||'Not set')}</div>
-            </div>
-            <div class="admin-cred-row">
-              <div class="admin-cred-label">Email Address</div>
-              <div class="admin-cred-value ${!u.email?'unset':''}">${esc(u.email||'Not set')}</div>
-            </div>
-            <div class="admin-cred-row">
-              <div class="admin-cred-label">Phone Number</div>
-              <div class="admin-cred-value ${!u.phone?'unset':''}">${esc(u.phone||'Not set')}</div>
-            </div>
-            <div class="admin-cred-row">
-              <div class="admin-cred-label">Password</div>
-              <div class="admin-cred-value">
-                ${u.passwordSet
-                  ? '<span style="color:var(--green);font-weight:800">✓ Set (SHA-256 hashed)</span>'
-                  : '<span style="color:var(--amber);font-weight:800">⚠ Not configured</span>'}
-              </div>
-            </div>
-            <div class="admin-cred-row">
-              <div class="admin-cred-label">Profile Photo</div>
-              <div class="admin-cred-value">
-                ${u.photo
-                  ? '<span style="color:var(--green);font-weight:800">✓ Uploaded</span>'
-                  : '<span style="color:var(--g400)">Not uploaded</span>'}
-              </div>
-            </div>
-            <div class="admin-cred-row">
-              <div class="admin-cred-label">Joined</div>
-              <div class="admin-cred-value">${u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : 'Unknown'}</div>
-            </div>
-            <div class="admin-cred-row">
-              <div class="admin-cred-label">Call Lists</div>
-              <div class="admin-cred-value">${u.lists}</div>
-            </div>
-            <div class="admin-cred-row" style="border-bottom:none">
-              <div class="admin-cred-label">Calls Made</div>
-              <div class="admin-cred-value">${u.callsMade}</div>
-            </div>
+            <div class="admin-cred-row"><div class="admin-cred-label">Name</div><div class="admin-cred-value ${!u.name?'unset':''}">${esc(u.name||'Not set')}</div></div>
+            <div class="admin-cred-row"><div class="admin-cred-label">Email</div><div class="admin-cred-value ${!u.email?'unset':''}">${esc(u.email||'Not set')}</div></div>
+            <div class="admin-cred-row"><div class="admin-cred-label">Password</div><div class="admin-cred-value">${u.passwordSet?'<span style="color:var(--green);font-weight:800">✓ Configured</span>':'<span style="color:var(--amber);font-weight:800">⚠ Not set</span>'}</div></div>
+            <div class="admin-cred-row"><div class="admin-cred-label">Photo</div><div class="admin-cred-value">${u.photo?'<span style="color:var(--green);font-weight:800">✓ Uploaded</span>':'<span style="color:var(--g400)">None</span>'}</div></div>
+            <div class="admin-cred-row" style="border-bottom:none"><div class="admin-cred-label">Joined</div><div class="admin-cred-value">${u.joinedAt?new Date(u.joinedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'Unknown'}</div></div>
           </div>
-          <div style="padding:10px 14px;background:var(--g50);border-top:1px solid var(--g200);font-size:11px;color:var(--g400);font-weight:600;text-align:center">
-            📌 Multi-device user sync requires backend integration
+          <div style="padding:8px 14px;background:var(--g50);border-top:1px solid var(--g200);font-size:11px;color:var(--g400);font-weight:600;text-align:center">
+            📌 Multi-device user management requires backend integration
           </div>
         </div>`).join('')}
     </div>
 
-    <!-- Call lists summary -->
-    <div class="admin-section">
-      <div class="admin-section-label">Call Lists (${S.lists.length})</div>
-      <div class="admin-card">
-        ${S.lists.length===0?`<div class="prof-row"><div class="prof-row-content"><div class="prof-row-value muted">No lists uploaded</div></div></div>`
-          : S.lists.map(list=>{
-            const called = list.owners.filter(o=>o.attempts>0).length;
-            const conn   = list.owners.filter(o=>o.callStatus==='connected').length;
-            const vm     = list.owners.filter(o=>o.callStatus==='voicemail').length;
-            const dnc    = list.owners.filter(o=>o.doNotCall).length;
-            return `<div class="prof-row">
-              <div class="prof-row-ico">📋</div>
-              <div class="prof-row-content">
-                <div class="prof-row-label">${esc(list.name)}</div>
-                <div class="prof-row-value" style="font-size:12px;font-weight:600;color:var(--g500)">
-                  ${list.owners.length} owners · ${called} called · ${conn} connected · ${vm} VM · ${dnc} DNC
-                </div>
-              </div>
-            </div>`;
-          }).join('')}
-      </div>
-    </div>
-
-    <!-- Calling stats -->
-    <div class="admin-section">
-      <div class="admin-section-label">Calling Statistics</div>
-      <div class="admin-card">
-        <div class="prof-row">
-          <div class="prof-row-ico" style="background:var(--green-l);color:var(--green)">✓</div>
-          <div class="prof-row-content"><div class="prof-row-label">Connected</div><div class="prof-row-value">${totalConn}</div></div>
-        </div>
-        <div class="prof-row">
-          <div class="prof-row-ico" style="background:var(--amber-l);color:var(--amber)">📬</div>
-          <div class="prof-row-content"><div class="prof-row-label">Voicemail</div>
-            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callStatus==='voicemail').length,0)}</div></div>
-        </div>
-        <div class="prof-row">
-          <div class="prof-row-ico" style="background:var(--red-l);color:var(--red)">⛔</div>
-          <div class="prof-row-content"><div class="prof-row-label">Do Not Call</div>
-            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.doNotCall).length,0)}</div></div>
-        </div>
-        <div class="prof-row">
-          <div class="prof-row-ico" style="background:var(--blue-l);color:var(--blue)">🧑‍💼</div>
-          <div class="prof-row-content"><div class="prof-row-label">Agents Identified</div>
-            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.agent).length,0)}</div></div>
-        </div>
-        <div class="prof-row">
-          <div class="prof-row-ico">📅</div>
-          <div class="prof-row-content"><div class="prof-row-label">Callbacks Scheduled</div>
-            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callbackDate).length,0)}</div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Support tickets -->
+    <!-- Support Tickets -->
     <div class="admin-section">
       <div class="admin-section-label">Support Tickets (${tickets.length} total · ${openTickets} open)</div>
       <div class="admin-card">
         ${tickets.length===0
-          ? `<div class="prof-row"><div class="prof-row-content"><div class="prof-row-value muted">No tickets yet</div></div></div>`
+          ?`<div class="prof-row"><div class="prof-row-content"><div class="prof-row-value muted">No tickets yet</div></div></div>`
           : tickets.map(t=>`
             <div class="admin-ticket">
               <div class="admin-ticket-head">
@@ -2576,8 +2674,8 @@ function renderAdminPanel(el) {
               <div class="admin-ticket-body">${esc(t.body)}</div>
               <div class="admin-ticket-actions">
                 ${t.status==='open'
-                  ? `<button class="admin-act-btn green" onclick="adminSetTicketStatus('${t.id}','resolved')">✓ Resolve</button>`
-                  : `<button class="admin-act-btn" onclick="adminSetTicketStatus('${t.id}','open')">Re-open</button>`}
+                  ?`<button class="admin-act-btn green" onclick="adminSetTicketStatus('${t.id}','resolved')">✓ Resolve</button>`
+                  :`<button class="admin-act-btn" onclick="adminSetTicketStatus('${t.id}','open')">Re-open</button>`}
                 <button class="admin-act-btn blue" onclick="window.location.href='mailto:${esc(t.from)}?subject=${encodeURIComponent('Re: '+t.subject)}'">✉ Reply</button>
                 <button class="admin-act-btn red" onclick="adminDeleteTicket('${t.id}')">Delete</button>
               </div>
@@ -2585,7 +2683,7 @@ function renderAdminPanel(el) {
       </div>
     </div>
 
-    <!-- Admin security -->
+    <!-- Admin Security -->
     <div class="admin-section">
       <div class="admin-section-label">Admin Security</div>
       <div class="admin-card">
