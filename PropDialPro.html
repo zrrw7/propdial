@@ -1,0 +1,2684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#6D28D9">
+<title>PropDial</title>
+
+<!-- XLSX: used for template download + Excel import only -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- ExcelJS: used for color-coded Excel export (supports cell fill colors) -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+
+<style>
+/* ── iOS CALLING NOTES ────────────────────────────────────────────────────
+   WHAT IS POSSIBLE on iPhone (web/PWA):
+   - tel: links open the native Phone app with the number pre-filled
+   - iOS shows "Call [number]?" confirmation — cannot be bypassed
+   - One-tap dial via <a href="tel:..."> is supported and compliant
+
+   WHAT IS NOT POSSIBLE without a VoIP provider (e.g. Twilio):
+   - Detecting call state: ringing / answered / voicemail / ended
+   - Auto-advancing after the call ends (no web callback when Phone app closes)
+   - Detecting voicemail vs no-answer automatically
+   - Suppressing the iOS confirmation dialog
+   - Running JS while the call is active
+
+   THE CORRECT COMPLIANT WORKFLOW (implemented here):
+   1. Tap "Call Owner" → tel: link → iOS confirmation → Phone app opens
+   2. Make the call, hang up, swipe back to PropDial
+   3. Manually tap a call result button
+   4. If Voicemail — a "Retry Once" banner appears, tap to call again
+   5. Tap Save & Next — advances to next owner automatically
+
+   FOR FULL AUTOMATION: Integrate Twilio Programmable Voice with WebRTC
+   client in the browser + a backend server for token generation. This
+   enables in-browser calling, voicemail detection, and auto-advance.
+─────────────────────────────────────────────────────────────────────── */
+
+/* ── Design Tokens ───────────────────────────────── */
+:root {
+  --p:        #6D28D9;
+  --p-dark:   #4C1D95;
+  --p-darker: #3B0764;
+  --p-mid:    #8B5CF6;
+  --p-light:  #EDE9FE;
+  --p-xlight: #F5F3FF;
+  --black:    #0A0A0A;
+  --white:    #FFFFFF;
+  --g50:      #F9FAFB;
+  --g100:     #F3F4F6;
+  --g200:     #E5E7EB;
+  --g300:     #D1D5DB;
+  --g400:     #9CA3AF;
+  --g500:     #6B7280;
+  --g700:     #374151;
+  --g900:     #111827;
+  --green:    #16A34A;
+  --green-l:  #DCFCE7;
+  --amber:    #D97706;
+  --amber-l:  #FEF3C7;
+  --red:      #DC2626;
+  --red-l:    #FEE2E2;
+  --blue:     #2563EB;
+  --blue-l:   #DBEAFE;
+  --r4: 4px; --r8: 8px; --r12: 12px; --r16: 16px; --r20: 20px; --r24: 24px;
+  --sh1: 0 1px 3px rgba(0,0,0,.08);
+  --sh2: 0 4px 16px rgba(0,0,0,.10);
+  --sh3: 0 8px 32px rgba(0,0,0,.14);
+  --shp: 0 4px 20px rgba(109,40,217,.35);
+  --font: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', system-ui, sans-serif;
+}
+
+/* ── Reset ───────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{height:100%;-webkit-tap-highlight-color:transparent}
+body{
+  font-family:var(--font);background:var(--white);color:var(--black);
+  min-height:100%;max-width:480px;margin:0 auto;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+button{cursor:pointer;border:none;background:none;font-family:var(--font);-webkit-tap-highlight-color:transparent}
+input,textarea,select{font-family:var(--font);outline:none}
+a{color:inherit;text-decoration:none}
+
+/* ── Top Nav ─────────────────────────────────────── */
+.nav{
+  position:sticky;top:0;z-index:100;
+  background:rgba(255,255,255,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-bottom:1.5px solid var(--g200);
+  display:flex;align-items:center;justify-content:space-between;
+  padding:14px 20px;padding-top:calc(14px + env(safe-area-inset-top,0px));
+}
+.nav-logo{font-size:22px;font-weight:900;letter-spacing:-0.8px;color:var(--black);display:flex;align-items:center;gap:2px}
+.nav-logo span{color:var(--p)}
+.nav-logo small{font-size:11px;font-weight:600;color:var(--g400);letter-spacing:.5px;margin-left:2px;margin-top:2px}
+.nav-right{display:flex;gap:8px;align-items:center}
+.nav-btn{padding:8px 14px;border-radius:var(--r12);font-size:14px;font-weight:700;transition:all .15s}
+.nav-btn-ghost{color:var(--g700)}.nav-btn-ghost:active{background:var(--g100)}
+.nav-btn-primary{background:var(--p);color:#fff;box-shadow:0 2px 8px rgba(109,40,217,.3)}
+.nav-btn-primary:active{background:var(--p-dark);transform:scale(.97)}
+
+/* ── Bottom Tab Bar ──────────────────────────────── */
+.tab-bar{
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+  width:100%;max-width:480px;z-index:100;
+  background:rgba(255,255,255,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+  border-top:1.5px solid var(--g200);display:flex;
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+.tab-item{
+  flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:10px 4px;color:var(--g400);font-size:10px;font-weight:600;
+  transition:color .15s;position:relative;
+}
+.tab-item.active{color:var(--p)}
+.tab-item svg{width:22px;height:22px;stroke-width:2}
+.tab-item:active{opacity:.7}
+.tab-badge{
+  position:absolute;top:6px;right:calc(50% - 20px);
+  background:var(--red);color:#fff;font-size:10px;font-weight:800;
+  min-width:16px;height:16px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;padding:0 4px;
+}
+
+/* ── Views ───────────────────────────────────────── */
+.view{display:none;padding:20px 20px calc(88px + env(safe-area-inset-bottom,0px))}
+.view.active{display:block}
+.view-calling.active{padding:14px 16px calc(88px + env(safe-area-inset-bottom,0px))}
+
+/* ── Typography ──────────────────────────────────── */
+.page-title{font-size:28px;font-weight:900;letter-spacing:-1px;margin-bottom:4px;line-height:1.1}
+.page-sub{font-size:14px;color:var(--g500);margin-bottom:20px;font-weight:500}
+.section-label{font-size:11px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--g400);margin-bottom:8px}
+
+/* ── Cards ───────────────────────────────────────── */
+.card{background:#fff;border:1.5px solid var(--g200);border-radius:var(--r16);padding:16px;margin-bottom:12px;box-shadow:var(--sh1)}
+
+/* ── List Card ───────────────────────────────────── */
+.list-card{
+  background:#fff;border:1.5px solid var(--g200);border-radius:var(--r16);
+  padding:16px 18px;margin-bottom:12px;box-shadow:var(--sh1);
+  position:relative;overflow:hidden;transition:box-shadow .15s;
+}
+.list-card:active{box-shadow:var(--sh2)}
+.list-card::before{
+  content:'';position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:linear-gradient(180deg,var(--p-mid),var(--p-dark));
+  border-radius:4px 0 0 4px;
+}
+.list-card-name{font-size:17px;font-weight:800;letter-spacing:-.3px;margin-bottom:4px}
+.list-card-meta{font-size:12px;color:var(--g400);margin-bottom:10px;font-weight:500}
+
+/* ── Stat Chips ──────────────────────────────────── */
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:20px;font-size:12px;font-weight:700}
+.chip-purple{background:var(--p-light);color:var(--p-dark)}
+.chip-gray{background:var(--g100);color:var(--g700)}
+.chip-green{background:var(--green-l);color:var(--green)}
+.chip-amber{background:var(--amber-l);color:var(--amber)}
+.chip-red{background:var(--red-l);color:var(--red)}
+.chip-blue{background:var(--blue-l);color:var(--blue)}
+
+/* ── Buttons ─────────────────────────────────────── */
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:6px;
+  border-radius:var(--r12);font-weight:700;font-size:14px;padding:10px 18px;
+  transition:all .15s;border:1.5px solid transparent;line-height:1;
+}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;pointer-events:none}
+.btn-primary{background:var(--p);color:#fff;box-shadow:0 2px 10px rgba(109,40,217,.3)}
+.btn-primary:active{background:var(--p-dark)}
+.btn-secondary{background:var(--p-light);color:var(--p-dark)}
+.btn-secondary:active{background:#DDD6FE}
+.btn-ghost{background:var(--g100);color:var(--g700)}
+.btn-ghost:active{background:var(--g200)}
+.btn-danger{background:var(--red-l);color:var(--red)}
+.btn-amber{background:var(--amber-l);color:#92400E}
+.btn-sm{font-size:13px;padding:7px 12px;border-radius:var(--r8)}
+.btn-lg{font-size:16px;padding:13px 22px;border-radius:var(--r16)}
+.btn-block{width:100%;justify-content:center}
+.btn-xl{width:100%;font-size:18px;font-weight:900;padding:18px 24px;border-radius:var(--r20);letter-spacing:-.3px;justify-content:center}
+.btn-call{
+  background:linear-gradient(135deg,var(--p-dark) 0%,var(--p) 60%,#9333EA 100%);
+  color:#fff;box-shadow:var(--shp);font-size:20px;font-weight:900;border-radius:var(--r20);
+}
+.btn-call:active{transform:scale(.97);box-shadow:0 2px 10px rgba(109,40,217,.25)}
+
+/* ── Result Buttons ──────────────────────────────── */
+.result-grid{display:grid;gap:8px}
+.result-grid-2{grid-template-columns:1fr 1fr}
+.result-grid-3{grid-template-columns:1fr 1fr 1fr}
+.rbtn{
+  padding:13px 6px;border-radius:var(--r12);font-size:13px;font-weight:800;
+  text-align:center;border:2px solid transparent;transition:all .15s;
+  letter-spacing:-.1px;line-height:1.2;
+}
+.rbtn:active{transform:scale(.96)}
+.rbtn.sel{outline:3px solid var(--p);outline-offset:2px;transform:scale(1.02)}
+.rbtn-selling  {background:var(--green-l);color:var(--green);border-color:#BBF7D0}
+.rbtn-buying   {background:var(--blue-l);color:var(--blue);border-color:#BFDBFE}
+.rbtn-callback {background:var(--p-light);color:var(--p-dark);border-color:#DDD6FE}
+.rbtn-ni       {background:var(--g100);color:var(--g700);border-color:var(--g200)}
+.rbtn-agent    {background:#E0F2FE;color:#0369A1;border-color:#BAE6FD}
+.rbtn-dnc      {background:var(--g900);color:#fff;border-color:#000}
+.rbtn-connected{background:var(--green-l);color:var(--green);border-color:#BBF7D0}
+.rbtn-voicemail{background:var(--amber-l);color:var(--amber);border-color:#FDE68A}
+.rbtn-no-answer{background:#FFF7ED;color:#C2410C;border-color:#FED7AA}
+.rbtn-invalid  {background:var(--red-l);color:var(--red);border-color:#FECACA}
+.rbtn-switched {background:#FFF1F2;color:#BE123C;border-color:#FECDD3}
+.rbtn-closed   {background:var(--g900);color:#fff;border-color:#000}
+
+/* ── Owner Profile Card ──────────────────────────── */
+.owner-card{background:#fff;border:1.5px solid var(--g200);border-radius:var(--r16);overflow:hidden;margin-bottom:14px;box-shadow:var(--sh2)}
+.owner-card-header{
+  background:linear-gradient(135deg,var(--p-darker) 0%,var(--p-dark) 40%,var(--p) 100%);
+  padding:18px 18px 16px;color:#fff;
+}
+.owner-card-name{font-size:21px;font-weight:900;letter-spacing:-.5px;margin-bottom:4px;line-height:1.2}
+.owner-card-phone{font-size:24px;font-weight:800;letter-spacing:.5px;margin-bottom:4px;font-variant-numeric:tabular-nums}
+.phone-edit-wrap{margin-bottom:10px}
+.phone-edit-label{font-size:10px;font-weight:700;color:rgba(255,255,255,.5);letter-spacing:.8px;text-transform:uppercase;margin-bottom:3px}
+.phone-edit{
+  font-size:22px;font-weight:800;letter-spacing:.5px;
+  background:rgba(255,255,255,.1);border:1.5px solid rgba(255,255,255,.25);
+  border-radius:var(--r8);color:#fff;width:100%;outline:none;
+  padding:8px 12px;font-variant-numeric:tabular-nums;
+  font-family:var(--font);transition:border-color .15s;
+}
+.phone-edit:focus{border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.15)}
+.phone-edit::placeholder{color:rgba(255,255,255,.4)}
+.phone-edit-actions{display:flex;gap:8px;margin-top:6px;margin-bottom:8px}
+.btn-save-phone{
+  padding:5px 12px;border-radius:var(--r8);font-size:12px;font-weight:700;
+  background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25);
+  transition:all .15s;
+}
+.btn-save-phone:active{background:rgba(255,255,255,.25)}
+.phone-normalized-tag{
+  font-size:11px;color:rgba(255,255,255,.6);font-weight:600;
+  display:flex;align-items:center;gap:4px;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PROFILE VIEW
+═══════════════════════════════════════════════════════════════ */
+.prof-hero{
+  background:linear-gradient(160deg,var(--p-dark) 0%,var(--p) 55%,var(--p-mid) 100%);
+  padding:36px 20px 28px;text-align:center;color:#fff;
+  border-radius:0 0 var(--r24) var(--r24);margin-bottom:20px;
+}
+.prof-avatar-wrap{position:relative;display:inline-block;margin-bottom:14px}
+.prof-avatar{
+  width:90px;height:90px;border-radius:50%;
+  background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.5);
+  display:flex;align-items:center;justify-content:center;
+  font-size:38px;overflow:hidden;cursor:pointer;
+}
+.prof-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.prof-avatar-edit{
+  position:absolute;bottom:0;right:0;width:28px;height:28px;border-radius:50%;
+  background:var(--white);color:var(--p);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;box-shadow:var(--sh2);border:2px solid var(--p-light);cursor:pointer;
+}
+.prof-name{font-size:22px;font-weight:900;letter-spacing:-.3px;margin-bottom:3px}
+.prof-tagline{font-size:13px;color:rgba(255,255,255,.7);font-weight:500}
+
+.prof-section{margin:0 0 16px}
+.prof-section-label{
+  font-size:11px;font-weight:800;color:var(--g500);letter-spacing:.8px;
+  text-transform:uppercase;padding:0 16px;margin-bottom:7px;
+}
+.prof-card{
+  background:var(--white);border:1px solid var(--g200);
+  border-radius:var(--r16);overflow:hidden;box-shadow:var(--sh1);
+}
+.prof-row{
+  display:flex;align-items:center;gap:12px;padding:14px 16px;
+  border-bottom:1px solid var(--g100);cursor:pointer;transition:background .12s;
+}
+.prof-row:last-child{border-bottom:none}
+.prof-row:active{background:var(--g50)}
+.prof-row-ico{
+  width:36px;height:36px;border-radius:var(--r8);
+  background:var(--p-xlight);color:var(--p);
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;flex-shrink:0;
+}
+.prof-row-ico.danger{background:var(--red-l);color:var(--red)}
+.prof-row-ico.admin{background:#1e1b4b;color:#a5b4fc}
+.prof-row-content{flex:1;min-width:0}
+.prof-row-label{font-size:11px;color:var(--g500);font-weight:700;margin-bottom:2px;letter-spacing:.2px}
+.prof-row-value{font-size:15px;font-weight:700;color:var(--g900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof-row-value.muted{color:var(--g400);font-weight:500}
+.prof-row-action{font-size:20px;color:var(--g300);flex-shrink:0}
+
+.prof-form{
+  background:var(--g50);border-top:1px solid var(--g200);padding:16px;
+}
+.prof-field{margin-bottom:12px}
+.prof-field label{
+  font-size:11px;font-weight:800;color:var(--g500);letter-spacing:.6px;
+  text-transform:uppercase;display:block;margin-bottom:5px;
+}
+.prof-field input,
+.prof-field textarea{
+  width:100%;padding:11px 13px;border:1.5px solid var(--g200);
+  border-radius:var(--r8);font-size:15px;font-weight:600;
+  background:var(--white);color:var(--g900);transition:border-color .15s;
+  font-family:var(--font);
+}
+.prof-field input:focus,
+.prof-field textarea:focus{border-color:var(--p);background:var(--white)}
+.prof-field textarea{resize:vertical;min-height:90px;line-height:1.5}
+.prof-form-actions{display:flex;gap:8px;margin-top:4px}
+.prof-btn-save{
+  flex:1;padding:11px;border-radius:var(--r8);font-size:14px;font-weight:800;
+  background:var(--p);color:#fff;transition:background .15s;
+}
+.prof-btn-save:active{background:var(--p-dark)}
+.prof-btn-cancel{
+  padding:11px 16px;border-radius:var(--r8);font-size:14px;font-weight:700;
+  background:var(--g200);color:var(--g700);
+}
+.prof-btn-danger{
+  width:100%;padding:13px;border-radius:var(--r12);font-size:15px;font-weight:800;
+  background:var(--red-l);color:var(--red);border:1.5px solid var(--red);
+  transition:background .12s;
+}
+.prof-btn-danger:active{background:#fecaca}
+
+/* Ticket cards in profile */
+.ticket-card{
+  border:1px solid var(--g200);border-radius:var(--r12);
+  padding:14px;margin-bottom:10px;background:var(--white);
+}
+.ticket-subject{font-size:14px;font-weight:800;color:var(--g900);margin-bottom:3px}
+.ticket-meta{font-size:11px;color:var(--g500);font-weight:600;margin-bottom:6px}
+.ticket-body{font-size:13px;color:var(--g700);line-height:1.5}
+.ticket-badge{
+  display:inline-block;font-size:10px;font-weight:800;letter-spacing:.6px;
+  text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-top:7px;
+}
+.ticket-badge.open{background:var(--amber-l);color:var(--amber)}
+.ticket-badge.resolved{background:var(--green-l);color:var(--green)}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN PANEL
+═══════════════════════════════════════════════════════════════ */
+.admin-hero{
+  background:linear-gradient(135deg,#09090b 0%,#1e1b4b 50%,#312e81 100%);
+  color:#fff;padding:28px 20px;border-radius:0 0 var(--r24) var(--r24);margin-bottom:20px;
+  text-align:center;
+}
+.admin-chip{
+  display:inline-block;background:var(--amber);color:#000;
+  font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
+  padding:3px 11px;border-radius:999px;margin-bottom:12px;
+}
+.admin-title{font-size:24px;font-weight:900;color:#fff;margin-bottom:4px}
+.admin-sub{font-size:13px;color:rgba(255,255,255,.55);font-weight:500}
+.admin-stats{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;
+}
+.admin-stat{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);
+  border-radius:var(--r12);padding:14px;text-align:center;
+}
+.admin-stat-n{font-size:30px;font-weight:900;color:#fff;line-height:1}
+.admin-stat-l{font-size:11px;color:rgba(255,255,255,.55);font-weight:600;margin-top:4px}
+
+.admin-section{margin:0 0 16px}
+.admin-section-label{
+  font-size:11px;font-weight:800;color:var(--g500);letter-spacing:.8px;
+  text-transform:uppercase;padding:0 16px;margin-bottom:7px;
+}
+.admin-card{
+  background:var(--white);border:1px solid var(--g200);
+  border-radius:var(--r16);overflow:hidden;box-shadow:var(--sh1);
+}
+.admin-ticket{
+  padding:14px 16px;border-bottom:1px solid var(--g100);
+}
+.admin-ticket:last-child{border-bottom:none}
+.admin-ticket-head{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;
+}
+.admin-ticket-subject{font-size:14px;font-weight:800;color:var(--g900);flex:1}
+.admin-ticket-from{font-size:11px;color:var(--g500);font-weight:600;margin-bottom:6px}
+.admin-ticket-body{font-size:13px;color:var(--g700);line-height:1.5}
+.admin-ticket-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.admin-act-btn{
+  padding:5px 11px;border-radius:var(--r8);font-size:11px;font-weight:800;
+  border:1px solid var(--g200);color:var(--g700);background:var(--g100);transition:background .12s;
+}
+.admin-act-btn.green{background:var(--green-l);color:var(--green);border-color:var(--green)}
+.admin-act-btn.red{background:var(--red-l);color:var(--red);border-color:var(--red)}
+.admin-act-btn.blue{background:var(--blue-l);color:var(--blue);border-color:var(--blue)}
+.admin-exit-btn{
+  width:100%;padding:14px;border-radius:var(--r12);font-size:15px;font-weight:800;
+  background:#1e1b4b;color:#fff;margin-bottom:16px;transition:background .12s;
+}
+.admin-exit-btn:active{background:#312e81}
+
+/* Admin user cards */
+.admin-user-card{
+  background:var(--white);border:1px solid var(--g200);
+  border-radius:var(--r16);overflow:hidden;box-shadow:var(--sh1);margin-bottom:12px;
+}
+.admin-user-head{
+  display:flex;align-items:center;gap:12px;padding:16px;
+  background:linear-gradient(135deg,#0f172a 0%,#1e1b4b 100%);
+}
+.admin-user-av{
+  width:48px;height:48px;border-radius:50%;
+  background:rgba(255,255,255,.15);border:2px solid rgba(255,255,255,.25);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;color:#fff;font-weight:800;flex-shrink:0;overflow:hidden;
+}
+.admin-user-meta{flex:1;min-width:0}
+.admin-user-name{font-size:16px;font-weight:800;color:#fff;margin-bottom:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.admin-user-id{font-size:11px;color:rgba(255,255,255,.5);font-weight:600}
+.admin-user-status{
+  font-size:10px;font-weight:900;letter-spacing:.8px;text-transform:uppercase;
+  padding:4px 10px;border-radius:999px;flex-shrink:0;
+}
+.admin-user-status.active{background:#22c55e;color:#fff}
+.admin-user-status.incomplete{background:var(--amber);color:#000}
+
+.admin-cred-table{background:var(--white)}
+.admin-cred-row{
+  display:flex;align-items:center;padding:11px 16px;
+  border-bottom:1px solid var(--g100);gap:12px;
+}
+.admin-cred-label{
+  font-size:11px;font-weight:800;color:var(--g500);letter-spacing:.3px;
+  width:110px;flex-shrink:0;text-transform:uppercase;font-size:10px;
+}
+.admin-cred-value{
+  font-size:14px;font-weight:700;color:var(--g900);flex:1;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+.admin-cred-value.unset{color:var(--g400);font-weight:500;font-style:italic}
+.owner-card-badges{display:flex;gap:6px;flex-wrap:wrap}
+.bdg{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:.2px}
+.bdg-white {background:rgba(255,255,255,.18);color:#fff}
+.bdg-green {background:var(--green);color:#fff}
+.bdg-amber {background:var(--amber);color:#fff}
+.bdg-red   {background:var(--red);color:#fff}
+.bdg-purple{background:#7C3AED;color:#fff}
+.bdg-dark  {background:#111;color:#fff}
+.bdg-blue  {background:var(--blue);color:#fff}
+.bdg-gray  {background:rgba(255,255,255,.12);color:rgba(255,255,255,.8)}
+.owner-card-body{padding:14px 16px}
+.details-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.d-item.full{grid-column:span 2}
+.d-label{font-size:10px;font-weight:800;color:var(--g400);text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.d-val{font-size:14px;font-weight:700;color:var(--black)}
+
+/* ── Progress ────────────────────────────────────── */
+.prog-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
+.prog-label{font-size:13px;font-weight:700;color:var(--g700)}
+.prog-count{font-size:13px;font-weight:800;color:var(--p)}
+.prog-track{height:5px;background:var(--g200);border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--p-dark),var(--p));border-radius:3px;transition:width .4s ease}
+
+/* ── Note Tabs ───────────────────────────────────── */
+.note-tab-row{
+  display:flex;gap:6px;margin-bottom:10px;
+  overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+}
+.note-tab-row::-webkit-scrollbar{display:none}
+.ntab{
+  flex-shrink:0;padding:7px 14px;border-radius:20px;
+  font-size:13px;font-weight:700;background:var(--g100);
+  color:var(--g700);border:1.5px solid transparent;transition:all .15s;
+}
+.ntab.on{background:var(--p-light);color:var(--p-dark);border-color:var(--p-mid)}
+.ntab:active{opacity:.8}
+.note-pane{display:none}
+.note-pane.show{display:block}
+.notes-box{
+  width:100%;min-height:90px;border:1.5px solid var(--g200);
+  border-radius:var(--r12);padding:12px;font-size:14px;
+  line-height:1.6;resize:vertical;background:var(--g50);
+  color:var(--black);transition:border-color .15s;
+}
+.notes-box:focus{border-color:var(--p);background:#fff}
+.notes-box::placeholder{color:var(--g300)}
+
+/* ── Retry Banner ────────────────────────────────── */
+.retry-banner{
+  background:var(--amber-l);border:2px solid #FDE68A;
+  border-radius:var(--r16);padding:16px;margin-bottom:14px;
+}
+.retry-banner-title{font-size:15px;font-weight:800;color:#92400E;margin-bottom:4px}
+.retry-banner-sub{font-size:13px;color:#78350F;margin-bottom:12px;line-height:1.4}
+.btn-retry{
+  width:100%;padding:14px;border-radius:var(--r12);
+  background:#D97706;color:#fff;font-size:16px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 3px 12px rgba(217,119,6,.35);
+}
+.btn-retry:active{transform:scale(.97)}
+
+/* ── Form ────────────────────────────────────────── */
+.form-group{margin-bottom:14px}
+.form-label{display:block;font-size:13px;font-weight:700;margin-bottom:5px;color:var(--g700)}
+.form-input{
+  width:100%;padding:12px 14px;border:1.5px solid var(--g200);
+  border-radius:var(--r12);font-size:15px;color:var(--black);
+  background:#fff;transition:border-color .15s;
+}
+.form-input:focus{border-color:var(--p)}
+.form-input::placeholder{color:var(--g300)}
+
+/* ── Upload Zone ─────────────────────────────────── */
+.upload-zone{
+  border:2px dashed var(--g300);border-radius:var(--r16);
+  padding:44px 20px;text-align:center;background:var(--g50);
+  transition:all .15s;cursor:pointer;
+}
+.upload-zone.drag-over{border-color:var(--p);background:var(--p-xlight)}
+.upload-zone-icon{font-size:52px;margin-bottom:12px;line-height:1}
+.upload-zone-title{font-size:17px;font-weight:800;margin-bottom:5px}
+.upload-zone-sub{font-size:14px;color:var(--g500)}
+
+/* ── Search ──────────────────────────────────────── */
+.search-wrap{position:relative;margin-bottom:10px}
+.search-ico{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--g400);pointer-events:none}
+.search-inp{
+  width:100%;padding:11px 14px 11px 38px;border:1.5px solid var(--g200);
+  border-radius:var(--r12);font-size:15px;background:var(--g50);
+  color:var(--black);transition:border-color .15s;
+}
+.search-inp:focus{border-color:var(--p);background:#fff}
+
+/* ── Filter Chips ────────────────────────────────── */
+.filter-row{display:flex;gap:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px;margin-bottom:14px;scrollbar-width:none}
+.filter-row::-webkit-scrollbar{display:none}
+.fcip{
+  white-space:nowrap;padding:6px 14px;border-radius:20px;
+  font-size:13px;font-weight:700;background:var(--g100);color:var(--g700);
+  border:1.5px solid transparent;transition:all .15s;flex-shrink:0;
+}
+.fcip.on{background:var(--p-light);color:var(--p-dark);border-color:var(--p-mid)}
+.fcip:active{opacity:.8}
+
+/* ── Owner Row ───────────────────────────────────── */
+.orow{
+  display:flex;align-items:center;gap:12px;padding:11px 14px;
+  border-radius:var(--r12);margin-bottom:7px;background:#fff;
+  border:1.5px solid var(--g200);transition:all .15s;cursor:pointer;
+}
+.orow:active{background:var(--g50)}
+.orow.s-connected{border-left:4px solid var(--green)}
+.orow.s-voicemail,.orow.s-no_answer{border-left:4px solid var(--amber)}
+.orow.s-invalid,.orow.s-switched_off,.orow.s-closed{border-left:4px solid var(--red)}
+.orow.s-callback{border-left:4px solid var(--p)}
+.orow.s-dnc{border-left:4px solid var(--g700);opacity:.65}
+.orow.s-agent{border-left:4px solid var(--blue)}
+.orow-av{
+  width:40px;height:40px;border-radius:50%;background:var(--p-light);
+  color:var(--p-dark);font-size:15px;font-weight:900;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.orow-info{flex:1;min-width:0}
+.orow-name{font-size:15px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orow-meta{font-size:12px;color:var(--g500);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.sdot{width:9px;height:9px;border-radius:50%;background:var(--g200);flex-shrink:0}
+.sdot.connected{background:var(--green)}
+.sdot.voicemail,.sdot.no_answer{background:var(--amber)}
+.sdot.invalid,.sdot.switched_off,.sdot.closed{background:var(--red)}
+.sdot.callback{background:var(--p)}
+.sdot.dnc{background:var(--g700)}
+.sdot.agent{background:var(--blue)}
+
+/* ── Callback Card ───────────────────────────────── */
+.cb-card{border:1.5px solid var(--p-mid);border-radius:var(--r12);padding:13px 14px;margin-bottom:8px;background:var(--p-xlight);cursor:pointer;transition:all .15s}
+.cb-card:active{transform:scale(.99)}
+.cb-card.overdue{border-color:var(--red);background:var(--red-l)}
+.cb-card-name{font-size:15px;font-weight:800;margin-bottom:2px}
+.cb-card-time{font-size:13px;color:var(--p-dark);font-weight:700}
+.cb-card.overdue .cb-card-time{color:var(--red)}
+.cb-card-note{font-size:13px;color:var(--g700);margin-top:5px;line-height:1.4}
+.cb-card-list{font-size:11px;color:var(--g400);margin-top:3px;font-weight:600}
+
+/* ── Calling Nav ─────────────────────────────────── */
+.calling-nav{display:flex;gap:8px;align-items:center;margin-bottom:12px}
+.calling-nav-mid{flex:1;text-align:center}
+.calling-pos{font-size:15px;font-weight:800;color:var(--black)}
+.calling-pos-sub{font-size:11px;color:var(--g500);margin-top:1px;font-weight:600}
+
+/* ── Bottom Sheet ────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:none;align-items:flex-end}
+.overlay.open{display:flex}
+.sheet{
+  background:#fff;border-radius:var(--r24) var(--r24) 0 0;
+  padding:8px 20px 20px;
+  padding-bottom:calc(20px + env(safe-area-inset-bottom,0px));
+  width:100%;max-height:88vh;overflow-y:auto;
+}
+.sheet-handle{width:36px;height:4px;background:var(--g200);border-radius:2px;margin:8px auto 20px}
+.sheet-title{font-size:20px;font-weight:900;letter-spacing:-.4px;margin-bottom:16px}
+
+/* ── Misc ────────────────────────────────────────── */
+.hr{height:1px;background:var(--g200);margin:16px 0}
+.empty{text-align:center;padding:56px 20px}
+.empty-ico{font-size:56px;margin-bottom:14px;line-height:1}
+.empty-title{font-size:20px;font-weight:800;margin-bottom:8px}
+.empty-sub{font-size:14px;color:var(--g500);margin-bottom:22px;line-height:1.5}
+.toast-wrap{
+  position:fixed;bottom:calc(88px + env(safe-area-inset-bottom,0px));
+  left:50%;transform:translateX(-50%);z-index:300;
+  display:flex;flex-direction:column;gap:8px;
+  width:calc(100% - 40px);max-width:440px;pointer-events:none;
+}
+.toast{padding:12px 16px;border-radius:var(--r12);font-size:14px;font-weight:700;background:var(--g900);color:#fff;text-align:center;box-shadow:var(--sh3);animation:su .2s ease}
+.toast.ok{background:var(--green)}.toast.err{background:var(--red)}
+@keyframes su{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.dnc-bar{background:var(--g900);color:#fff;border-radius:var(--r12);padding:10px 14px;display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:14px;font-weight:700}
+.ios-tip{background:#FFFBEB;border:1px solid #FCD34D;border-radius:var(--r8);padding:10px 13px;font-size:12px;color:#78350F;line-height:1.5;margin-bottom:12px;font-weight:500}
+.attempts-tag{display:inline-flex;align-items:center;gap:3px;background:rgba(255,255,255,.15);color:rgba(255,255,255,.8);border-radius:20px;padding:2px 9px;font-size:11px;font-weight:700}
+.flex{display:flex}.flex-b{display:flex;justify-content:space-between;align-items:center}
+.gap8{gap:8px}.gap12{gap:12px}
+.mb8{margin-bottom:8px}.mb12{margin-bottom:12px}.mb14{margin-bottom:14px}.mb16{margin-bottom:16px}.mb20{margin-bottom:20px}
+.mt8{margin-top:8px}.mt12{margin-top:12px}.w-full{width:100%}
+.text-sm{font-size:13px}.text-xs{font-size:11px}.text-gray{color:var(--g500)}
+.export-loading{text-align:center;padding:20px;color:var(--g500);font-size:14px;font-weight:600}
+
+@media(min-width:480px){body{border-left:1px solid var(--g200);border-right:1px solid var(--g200)}}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="top-nav">
+  <div class="nav-logo">Prop<span>Dial</span><small>PRO</small></div>
+  <div class="nav-right" id="nav-right"></div>
+</nav>
+
+<main>
+  <div id="view-dashboard" class="view active"></div>
+  <div id="view-upload" class="view"></div>
+  <div id="view-list" class="view"></div>
+  <div id="view-calling" class="view view-calling"></div>
+  <div id="view-callbacks" class="view"></div>
+  <div id="view-profile" class="view"></div>
+</main>
+
+<nav class="tab-bar">
+  <button class="tab-item active" data-tab="dashboard" onclick="nav('dashboard')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+    Lists
+  </button>
+  <button class="tab-item" data-tab="callbacks" onclick="nav('callbacks')" id="tab-callbacks" style="position:relative">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+    Callbacks
+  </button>
+  <button class="tab-item" data-tab="upload" onclick="nav('upload')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+    Upload
+  </button>
+  <button class="tab-item" data-tab="profile" onclick="nav('profile')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+    Profile
+  </button>
+</nav>
+
+<div class="overlay" id="overlay" onclick="closeSheet()">
+  <div class="sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div id="sheet-body"></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+<input type="file" id="file-inp" accept=".xlsx,.xls" style="display:none">
+
+<script>
+'use strict';
+
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+const S = {
+  view:     'dashboard',
+  lists:    [],
+  listId:   null,
+  ownerIdx: 0,
+  filter:   'all',
+  search:   '',
+  noteTab:  'call',      // active note tab: call | callback | selling | buying
+  uploadRows:   null,
+  uploadErrors: [],
+};
+
+// ══════════════════════════════════════════════════════════════════
+// PERSISTENCE
+// ══════════════════════════════════════════════════════════════════
+function persist() {
+  try { localStorage.setItem('pd4', JSON.stringify(S.lists)); } catch(e) {}
+}
+function restore() {
+  try { const r = localStorage.getItem('pd4'); if (r) S.lists = JSON.parse(r); } catch(e) {}
+}
+
+// ══════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════
+const uid     = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const esc     = s  => String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const fmtDate = d  => d ? new Date(d).toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}) : '—';
+const fmtTime = d  => d ? new Date(d).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}) : '';
+const initials= n  => (n||'?').split(' ').map(w=>w[0]).filter(Boolean).slice(0,2).join('').toUpperCase();
+
+function statusClass(o) {
+  if (o.doNotCall) return 'dnc';
+  if (o.agent) return 'agent';
+  if (o.leadCategory === 'callback') return 'callback';
+  if (o.callStatus === 'connected') return 'connected';
+  if (['voicemail','no_answer'].includes(o.callStatus)) return 'voicemail';
+  if (['invalid','switched_off','closed'].includes(o.callStatus)) return 'invalid';
+  return '';
+}
+
+function statusLabel(o) {
+  if (o.doNotCall) return 'Do Not Call';
+  if (o.agent) return 'Agent';
+  const lmap = {selling:'Selling',buying:'Buying',callback:'Callback',not_interested:'Not Interested'};
+  if (o.leadCategory && lmap[o.leadCategory]) return lmap[o.leadCategory];
+  const smap = {connected:'Connected',voicemail:'Voicemail',no_answer:'No Answer',
+    invalid:'Invalid No.',switched_off:'Switched Off',closed:'Closed No.'};
+  if (o.callStatus && smap[o.callStatus]) return smap[o.callStatus];
+  return 'Uncalled';
+}
+
+function statusBadgeCls(o) {
+  if (o.doNotCall) return 'bdg-dark';
+  if (o.agent) return 'bdg-blue';
+  if (o.leadCategory === 'selling') return 'bdg-green';
+  if (o.leadCategory === 'buying') return 'bdg-blue';
+  if (o.leadCategory === 'callback') return 'bdg-purple';
+  if (o.callStatus === 'connected') return 'bdg-green';
+  if (['voicemail','no_answer'].includes(o.callStatus)) return 'bdg-amber';
+  if (['invalid','switched_off','closed'].includes(o.callStatus)) return 'bdg-red';
+  return 'bdg-gray';
+}
+
+function getList(id) { return S.lists.find(l => l.id === (id ?? S.listId)); }
+function curList()   { return getList(S.listId); }
+
+function stats(list) {
+  const o = list.owners;
+  return {
+    total:    o.length,
+    called:   o.filter(x => x.callStatus).length,
+    connected:o.filter(x => x.callStatus === 'connected').length,
+    voicemail:o.filter(x => ['voicemail','no_answer'].includes(x.callStatus)).length,
+    invalid:  o.filter(x => ['invalid','switched_off','closed'].includes(x.callStatus)).length,
+    callback: o.filter(x => x.leadCategory === 'callback').length,
+    selling:  o.filter(x => x.leadCategory === 'selling').length,
+    buying:   o.filter(x => x.leadCategory === 'buying').length,
+    ni:       o.filter(x => x.leadCategory === 'not_interested').length,
+    agent:    o.filter(x => x.agent).length,
+    dnc:      o.filter(x => x.doNotCall).length,
+  };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PHONE NORMALIZATION
+// Converts any raw number into +[countrycode][number] format
+// based on the owner's Country field.
+// ══════════════════════════════════════════════════════════════════
+
+// Country name / alias → dial code
+const DIAL_CODES = {
+  // Gulf & Middle East
+  'uae':971,'united arab emirates':971,'emirates':971,'u.a.e':971,'u.a.e.':971,'dubai':971,'abu dhabi':971,
+  'saudi arabia':966,'ksa':966,'saudi':966,'kingdom of saudi arabia':966,'ksa ':966,
+  'kuwait':965,'qatar':974,'bahrain':973,'oman':968,
+  'jordan':962,'lebanon':961,'egypt':20,'iraq':964,'iran':98,
+  'israel':972,'palestine':970,'syria':963,'turkey':90,'turkiye':90,
+  'yemen':967,'libya':218,'morocco':212,'tunisia':216,'algeria':213,
+  'sudan':249,'somalia':252,
+  // Asia
+  'india':91,'pakistan':92,'bangladesh':880,'sri lanka':94,'nepal':977,
+  'china':86,'japan':81,'south korea':82,'korea':82,'north korea':850,
+  'philippines':63,'indonesia':62,'malaysia':60,'singapore':65,
+  'thailand':66,'vietnam':84,'hong kong':852,'taiwan':886,'macau':853,
+  'myanmar':95,'cambodia':855,'laos':856,'mongolia':976,
+  'uzbekistan':998,'kazakhstan':7,'afghanistan':93,
+  // Europe
+  'uk':44,'united kingdom':44,'britain':44,'england':44,'great britain':44,'scotland':44,'wales':44,
+  'france':33,'germany':49,'italy':39,'spain':34,'portugal':351,
+  'netherlands':31,'holland':31,'belgium':32,'luxembourg':352,
+  'switzerland':41,'austria':43,'sweden':46,'norway':47,
+  'denmark':45,'finland':358,'ireland':353,'iceland':354,
+  'poland':48,'russia':7,'ukraine':380,'greece':30,
+  'czech republic':420,'czechia':420,'hungary':36,'romania':40,
+  'bulgaria':359,'croatia':385,'serbia':381,'slovakia':421,
+  'slovenia':386,'albania':355,'macedonia':389,'moldova':373,
+  'estonia':372,'latvia':371,'lithuania':370,'belarus':375,
+  'cyprus':357,'malta':356,'monaco':377,'liechtenstein':423,
+  // Americas
+  'usa':1,'united states':1,'us':1,'america':1,'united states of america':1,
+  'canada':1,'mexico':52,'brazil':55,'argentina':54,
+  'colombia':57,'chile':56,'peru':51,'venezuela':58,
+  'ecuador':593,'bolivia':591,'paraguay':595,'uruguay':598,
+  'panama':507,'costa rica':506,'guatemala':502,'honduras':504,
+  'el salvador':503,'nicaragua':505,'cuba':53,'dominican republic':1,
+  'puerto rico':1,'jamaica':1,'trinidad':1,'trinidad and tobago':1,
+  // Africa
+  'south africa':27,'nigeria':234,'kenya':254,'ethiopia':251,
+  'ghana':233,'tanzania':255,'uganda':256,'rwanda':250,
+  'senegal':221,'cameroon':237,'angola':244,'zambia':260,
+  'zimbabwe':263,'mozambique':258,'botswana':267,'namibia':264,
+  // Oceania
+  'australia':61,'new zealand':64,'fiji':679,'papua new guinea':675,
+};
+
+function getDialCode(country) {
+  if (!country) return null;
+  const key = String(country).toLowerCase().trim().replace(/\.$/, '');
+  if (DIAL_CODES[key] !== undefined) return DIAL_CODES[key];
+  for (const [k, v] of Object.entries(DIAL_CODES)) {
+    if (key.includes(k) || k.includes(key)) return v;
+  }
+  return null;
+}
+
+// Unique dial code strings sorted longest-first so 357 matches before 35 or 3
+const SORTED_CODE_STRS = (() => {
+  const unique = [...new Set(Object.values(DIAL_CODES).map(String))];
+  return unique.sort((a, b) => b.length - a.length);
+})();
+
+// Per-country valid total digit lengths [min, max] (country code digits + national number digits).
+// A number must both START with the code AND have a length within this range to be accepted.
+// Example: '971' UAE requires 11–12 total digits — so "9715" (4 digits) is rejected
+// and falls through to the country-fallback instead.
+const CODE_LENGTH_RULES = {
+  // Gulf & Middle East
+  '971': [11, 12], '966': [12, 13], '965': [11, 11], '974': [11, 11],
+  '973': [11, 11], '968': [11, 12], '962': [11, 12], '961': [10, 11],
+  '20':  [11, 12], '964': [12, 13], '98':  [11, 12], '972': [11, 12],
+  '970': [11, 12], '963': [11, 12], '90':  [12, 12], '967': [12, 12],
+  '212': [11, 12], '213': [12, 12], '216': [11, 11], '218': [11, 12],
+  '249': [12, 12], '252': [11, 12],
+  // Europe
+  '1':   [11, 11], '7':   [11, 11], '44':  [12, 12], '33':  [11, 11],
+  '49':  [11, 13], '39':  [10, 12], '34':  [11, 11], '351': [12, 12],
+  '31':  [11, 11], '32':  [11, 11], '352': [10, 13], '41':  [11, 12],
+  '43':  [11, 13], '46':  [11, 12], '47':  [10, 11], '45':  [10, 10],
+  '358': [11, 12], '353': [11, 12], '354': [11, 11], '48':  [11, 11],
+  '380': [11, 12], '375': [12, 12], '30':  [12, 12], '357': [11, 11],
+  '356': [11, 11], '36':  [11, 12], '40':  [11, 11], '359': [11, 12],
+  '420': [12, 12], '421': [12, 12], '386': [11, 11], '385': [11, 12],
+  '381': [11, 12], '370': [11, 11], '371': [11, 11], '372': [10, 11],
+  '373': [11, 11], '355': [11, 12], '389': [11, 11], '377': [10, 11],
+  // Asia Pacific
+  '91':  [12, 12], '92':  [12, 12], '880': [12, 13], '94':  [11, 11],
+  '977': [12, 12], '93':  [12, 12], '86':  [13, 13], '81':  [11, 12],
+  '82':  [11, 12], '63':  [12, 12], '62':  [11, 13], '60':  [10, 12],
+  '65':  [10, 10], '66':  [11, 11], '84':  [11, 12], '95':  [11, 12],
+  '855': [11, 11], '856': [11, 12], '852': [11, 11], '886': [11, 12],
+  '853': [11, 11], '976': [11, 11], '998': [12, 12],
+  // Oceania
+  '61':  [11, 11], '64':  [10, 12], '679': [10, 10],
+  // Americas
+  '52':  [12, 12], '55':  [12, 13], '54':  [12, 13], '57':  [12, 12],
+  '56':  [11, 11], '51':  [11, 12], '58':  [11, 11], '507': [11, 11],
+  '506': [11, 11], '502': [12, 12], '504': [12, 12], '503': [11, 11],
+  '505': [11, 11], '53':  [10, 11],
+  // Africa
+  '27':  [11, 11], '234': [13, 14], '254': [12, 12], '251': [12, 12],
+  '233': [12, 12], '255': [12, 12], '256': [12, 12], '250': [12, 12],
+  '221': [12, 12], '237': [12, 12], '244': [12, 12], '260': [12, 12],
+  '263': [12, 13], '267': [11, 11], '264': [12, 12],
+};
+
+// Returns the matched dial code string if `digits` begins with a known country
+// code AND the total digit count falls within that country's valid range.
+// Returns null if the number is too short, too long, or unrecognised — so the
+// caller can fall back to the contact's Country field instead.
+function detectCodeInNumber(digits) {
+  for (const code of SORTED_CODE_STRS) {
+    if (!digits.startsWith(code)) continue;
+    const rule = CODE_LENGTH_RULES[code];
+    if (rule) {
+      const [min, max] = rule;
+      if (digits.length >= min && digits.length <= max) return code;
+      // Prefix matched but length is wrong — number is too short/long for this
+      // country. Stop here; don't let a shorter code (e.g. '97' or '9') match
+      // the same prefix and produce a nonsense result.
+      if (digits.length < min) return null;
+    } else {
+      // Code not in length map — conservative generic guard
+      const minLen = code.length <= 2 ? 11 : code.length + 7;
+      if (digits.length >= minLen) return code;
+    }
+  }
+  return null;
+}
+
+function normalizePhone(raw, country) {
+  if (!raw) return '';
+  // Strip formatting — keep only digits and a leading +
+  let num = String(raw).replace(/[\s\-\.\(\)\/\\]/g, '').replace(/[^\d+]/g, '');
+  if (!num) return '';
+
+  // Already in international format
+  if (num.startsWith('+')) return num;
+
+  // 00XXXX → +XXXX (international dial prefix)
+  if (num.startsWith('00')) return '+' + num.slice(2);
+
+  // Strip a single leading trunk zero (e.g. 0971… or 07911…)
+  const stripped = num.startsWith('0') ? num.slice(1) : num;
+
+  // ── Step 1: detect if the number itself already contains a country code ──
+  // The contact's Country field is NOT consulted here.
+  // Example: country=Cyprus but number starts with 971 → returns +971…
+  const detected = detectCodeInNumber(stripped);
+  if (detected) return '+' + stripped;
+
+  // ── Step 2: fallback — use the contact's Country field ──
+  // Only reached when no known code was found in the number itself.
+  const dialCode = getDialCode(country);
+  if (!dialCode) return stripped; // Unknown country — return cleaned digits
+
+  return '+' + String(dialCode) + stripped;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// DATA MODEL
+// ══════════════════════════════════════════════════════════════════
+const COLS = ['Date','Procedure Value','Area','Project','Building Name','Size','Unit Number','Owner Name','Mobile','Country'];
+
+function mkOwner(row) {
+  return {
+    id:             uid(),
+    date:           String(row['Date'] ?? ''),
+    procedureValue: String(row['Procedure Value'] ?? ''),
+    area:           String(row['Area'] ?? ''),
+    project:        String(row['Project'] ?? ''),
+    buildingName:   String(row['Building Name'] ?? ''),
+    size:           String(row['Size'] ?? ''),
+    unitNumber:     String(row['Unit Number'] ?? ''),
+    ownerName:      String(row['Owner Name'] ?? ''),
+    country:        String(row['Country'] ?? ''),
+    mobile:         normalizePhone(String(row['Mobile'] ?? ''), String(row['Country'] ?? '')),
+    // call tracking
+    callStatus:    null,
+    leadCategory:  null,
+    // notes — split into 4 sections
+    note_call:     '',
+    note_callback: '',
+    note_selling:  '',
+    note_buying:   '',
+    // callback scheduling
+    callbackDate:  '',
+    callbackTime:  '',
+    // stats
+    attempts:      0,
+    retryUsed:     false,
+    lastCalledAt:  null,
+    callConnected: false,
+    doNotCall:     false,
+    agent:         false,
+    finalResult:   '',
+    history:       [],
+  };
+}
+
+// Safely read a note field, handling old single-notes format
+function getNote(o, field) {
+  const key = 'note_' + field;
+  if (o[key] !== undefined) return o[key];
+  // Migrate: put old notes into call tab
+  if (field === 'call' && o.notes) return o.notes;
+  return '';
+}
+
+function mkList(name, owners) {
+  return { id: uid(), name, owners, uploadDate: Date.now(), lastUsed: null };
+}
+
+// ══════════════════════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════════════════════
+function nav(view, params = {}) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+
+  S.view = view;
+  if (params.listId !== undefined) S.listId  = params.listId;
+  if (params.idx    !== undefined) S.ownerIdx = params.idx;
+  if (params.filter !== undefined) S.filter  = params.filter;
+  if (params.search !== undefined) S.search  = params.search;
+
+  const vel = document.getElementById('view-' + view);
+  if (vel) vel.classList.add('active');
+  const tel = document.querySelector(`[data-tab="${view}"]`);
+  if (tel) tel.classList.add('active');
+
+  renderView(view);
+  window.scrollTo(0, 0);
+  updateCallbackBadge();
+}
+
+function renderView(v) {
+  ({dashboard:renderDashboard,upload:renderUpload,list:renderList,
+    calling:renderCalling,callbacks:renderCallbacks,profile:renderProfile})[v]?.();
+  renderNav();
+}
+
+function renderNav() {
+  const nr = document.getElementById('nav-right');
+  if (S.view === 'calling') {
+    nr.innerHTML = `<button class="nav-btn nav-btn-ghost" onclick="nav('list',{listId:S.listId})">✕ Exit</button>`;
+  } else if (S.view === 'list') {
+    nr.innerHTML = `
+      <button class="nav-btn nav-btn-ghost" onclick="showListMenu()">⋯</button>
+      <button class="nav-btn nav-btn-primary" onclick="startCalling()">▶ Call</button>`;
+  } else { nr.innerHTML = ''; }
+}
+
+function updateCallbackBadge() {
+  const count = S.lists.reduce((n,l) => n + l.owners.filter(o => o.leadCategory === 'callback').length, 0);
+  const tab   = document.getElementById('tab-callbacks');
+  tab?.querySelector('.tab-badge')?.remove();
+  if (count > 0 && tab) {
+    const b = document.createElement('div');
+    b.className = 'tab-badge';
+    b.textContent = count > 9 ? '9+' : count;
+    tab.appendChild(b);
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════
+function toast(msg, type='') {
+  const el = document.createElement('div');
+  el.className = 'toast' + (type ? ' '+type : '');
+  el.textContent = msg;
+  document.getElementById('toasts').appendChild(el);
+  setTimeout(() => el.remove(), 2800);
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SHEET
+// ══════════════════════════════════════════════════════════════════
+function openSheet(html) {
+  document.getElementById('sheet-body').innerHTML = html;
+  document.getElementById('overlay').classList.add('open');
+}
+function closeSheet() { document.getElementById('overlay').classList.remove('open'); }
+
+// ══════════════════════════════════════════════════════════════════
+// DASHBOARD
+// ══════════════════════════════════════════════════════════════════
+function renderDashboard() {
+  const el = document.getElementById('view-dashboard');
+  if (S.lists.length === 0) {
+    el.innerHTML = `
+      <div class="page-title">Call Lists</div>
+      <div class="page-sub">Your real estate owner lists</div>
+      <div class="empty">
+        <div class="empty-ico">📋</div>
+        <div class="empty-title">No lists yet</div>
+        <div class="empty-sub">Upload an Excel file with owner data to start calling</div>
+        <button class="btn btn-primary btn-lg" onclick="nav('upload')">+ Upload First List</button>
+      </div>`;
+    return;
+  }
+  const totalCB = S.lists.reduce((n,l) => n + l.owners.filter(o => o.leadCategory === 'callback').length, 0);
+  const now     = new Date(); now.setHours(0,0,0,0);
+  const overdCB = S.lists.reduce((n,l) => n + l.owners.filter(o =>
+    o.leadCategory === 'callback' && o.callbackDate && new Date(o.callbackDate) < now).length, 0);
+
+  el.innerHTML = `
+    <div class="flex-b mb20">
+      <div>
+        <div class="page-title">Call Lists</div>
+        <div class="page-sub">${S.lists.length} list${S.lists.length!==1?'s':''} saved</div>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="nav('upload')">+ Upload</button>
+    </div>
+    ${totalCB > 0 ? `
+      <div class="card mb14" style="background:${overdCB>0?'var(--red-l)':'var(--p-xlight)'};border-color:${overdCB>0?'var(--red)':'var(--p-mid)'};cursor:pointer" onclick="nav('callbacks')">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="font-size:30px">📅</div>
+          <div>
+            <div style="font-weight:800;font-size:15px;color:${overdCB>0?'var(--red)':'var(--p-dark)'}">${totalCB} Callback${totalCB!==1?'s':''} ${overdCB>0?`(${overdCB} overdue)`:''}</div>
+            <div style="font-size:12px;color:var(--g500)">Tap to view all scheduled callbacks</div>
+          </div>
+        </div>
+      </div>` : ''}
+    ${S.lists.map(l => listCard(l)).join('')}`;
+}
+
+function listCard(list) {
+  const s   = stats(list);
+  const pct = s.total > 0 ? Math.round(s.called / s.total * 100) : 0;
+  return `
+    <div class="list-card">
+      <div class="flex-b mb8">
+        <div class="list-card-name">${esc(list.name)}</div>
+        <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();showListOptions('${list.id}')">⋯</button>
+      </div>
+      <div class="list-card-meta">Uploaded ${fmtDate(list.uploadDate)} · ${list.lastUsed?'Used '+fmtDate(list.lastUsed):'Never used'}</div>
+      <div class="mb8">
+        <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+        <div style="font-size:11px;color:var(--g400);margin-top:3px;font-weight:600">${s.called} / ${s.total} called · ${pct}%</div>
+      </div>
+      <div class="chips">
+        <div class="chip chip-green">✓ ${s.connected}</div>
+        <div class="chip chip-amber">⟳ ${s.voicemail}</div>
+        <div class="chip chip-red">✗ ${s.invalid}</div>
+        ${s.callback?`<div class="chip chip-purple">📅 ${s.callback} Callback</div>`:''}
+        ${s.selling?`<div class="chip chip-green">🏷 ${s.selling} Selling</div>`:''}
+        ${s.buying?`<div class="chip chip-blue">🔑 ${s.buying} Buying</div>`:''}
+        ${s.ni?`<div class="chip chip-gray">👎 ${s.ni} NI</div>`:''}
+        ${s.dnc?`<div class="chip chip-gray">⛔ ${s.dnc} DNC</div>`:''}
+      </div>
+      <div class="flex gap8 mt8">
+        <button class="btn btn-primary btn-sm" onclick="startCallingList('${list.id}')">▶ Start Calling</button>
+        <button class="btn btn-secondary btn-sm" onclick="openList('${list.id}')">View List</button>
+        <button class="btn btn-ghost btn-sm" onclick="exportList('${list.id}')">⬇ Export</button>
+      </div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UPLOAD
+// ══════════════════════════════════════════════════════════════════
+function renderUpload() {
+  const el = document.getElementById('view-upload');
+  el.innerHTML = `
+    <div class="page-title">Upload List</div>
+    <div class="page-sub">Import owner data from Excel</div>
+    <button class="btn btn-secondary btn-block mb16" onclick="downloadTemplate()">📥 Download Excel Template</button>
+    <div class="upload-zone" id="upzone" onclick="document.getElementById('file-inp').click()">
+      <div class="upload-zone-icon">📂</div>
+      <div class="upload-zone-title">Tap to select file</div>
+      <div class="upload-zone-sub">.xlsx or .xls format</div>
+    </div>
+    <div id="up-preview"></div>`;
+
+  const zone = document.getElementById('upzone');
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); handleFile(e.dataTransfer.files[0]); });
+  document.getElementById('file-inp').onchange = e => { if(e.target.files[0]) handleFile(e.target.files[0]); };
+}
+
+function downloadTemplate() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([COLS]);
+  ws['!cols'] = COLS.map(() => ({wch:18}));
+  XLSX.utils.book_append_sheet(wb, ws, 'Owners');
+  XLSX.writeFile(wb, 'PropDial_Template.xlsx');
+  toast('Template downloaded', 'ok');
+}
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb   = XLSX.read(e.target.result, {type:'binary'});
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, {defval:''});
+      parseUpload(rows, file.name);
+    } catch(err) { toast('Could not read file — use the template.', 'err'); }
+  };
+  reader.readAsBinaryString(file);
+}
+
+function parseUpload(rows, filename) {
+  const errs = [], owners = [];
+  rows.forEach((row, i) => {
+    if (!row['Owner Name'] && !row['Mobile']) return;
+    if (!row['Owner Name']) errs.push(`Row ${i+2}: Missing Owner Name`);
+    if (!row['Mobile'])     errs.push(`Row ${i+2}: Missing Mobile`);
+    owners.push(mkOwner(row));
+  });
+  S.uploadRows   = owners;
+  S.uploadErrors = errs;
+  showUploadPreview(owners, errs, filename.replace(/\.[^.]+$/,'').replace(/[_-]/g,' '));
+}
+
+function showUploadPreview(owners, errs, defName) {
+  document.getElementById('up-preview').innerHTML = `
+    <div class="hr"></div>
+    ${errs.length ? `
+      <div style="background:var(--amber-l);border:1px solid #FDE68A;border-radius:var(--r8);padding:12px 14px;margin-bottom:14px">
+        <div style="font-weight:800;color:#92400E;margin-bottom:5px">⚠ ${errs.length} Warning${errs.length!==1?'s':''}</div>
+        ${errs.slice(0,5).map(e=>`<div style="font-size:13px;color:#92400E">${esc(e)}</div>`).join('')}
+        ${errs.length>5?`<div style="font-size:12px;color:#92400E;margin-top:3px">+${errs.length-5} more</div>`:''}
+      </div>` : ''}
+    <div style="background:var(--green-l);border:1px solid #BBF7D0;border-radius:var(--r8);padding:12px 14px;margin-bottom:14px;font-weight:800;color:var(--green)">
+      ✓ ${owners.length} owner${owners.length!==1?'s':''} ready to import
+    </div>
+    <div class="form-group">
+      <label class="form-label">List Name</label>
+      <input class="form-input" id="list-name" value="${esc(defName)}" placeholder="e.g. Serenia Owners June 2026">
+    </div>
+    <div class="text-xs text-gray mb8">Preview (first 3 rows)</div>
+    ${(() => {
+      const normalized = owners.filter(o => o.mobile).length;
+      const withCode   = owners.filter(o => o.mobile.startsWith('+')).length;
+      return `<div style="background:var(--p-xlight);border:1px solid var(--p-mid);border-radius:var(--r8);padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--p-dark);font-weight:600">
+        📞 ${withCode} / ${normalized} numbers successfully converted to international format
+      </div>`;
+    })()}
+    ${owners.slice(0,3).map(o=>`
+      <div style="border:1px solid var(--g200);border-radius:var(--r8);padding:10px 12px;margin-bottom:7px">
+        <div style="font-weight:800;font-size:14px">${esc(o.ownerName)||'(no name)'}</div>
+        <div style="font-size:12px;color:var(--g500);margin-top:2px">${esc(o.project)||'—'} · ${esc(o.buildingName)||'—'} · Unit ${esc(o.unitNumber)||'—'}</div>
+        <div style="font-size:13px;font-weight:700;color:${o.mobile.startsWith('+')?'var(--green)':'var(--amber)'};margin-top:4px">
+          📞 ${esc(o.mobile)||'No number'} ${o.country?'('+esc(o.country)+')':''}
+        </div>
+      </div>`).join('')}
+    <button class="btn btn-primary btn-xl mt8" onclick="saveUpload()">Save List · ${owners.length} Owners</button>`;
+}
+
+function saveUpload() {
+  const name = document.getElementById('list-name')?.value?.trim();
+  if (!name)             { toast('Enter a list name', 'err'); return; }
+  if (!S.uploadRows?.length) { toast('No owner data found', 'err'); return; }
+  const list = mkList(name, S.uploadRows);
+  S.lists.unshift(list);
+  persist();
+  S.uploadRows = null; S.uploadErrors = [];
+  document.getElementById('file-inp').value = '';
+  toast(`"${name}" saved — ${list.owners.length} owners`, 'ok');
+  nav('list', {listId: list.id});
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LIST VIEW
+// ══════════════════════════════════════════════════════════════════
+function openList(listId) { S.filter='all'; S.search=''; nav('list',{listId}); }
+
+function renderList() {
+  const list = curList();
+  if (!list) { nav('dashboard'); return; }
+  const s   = stats(list);
+  const pct = s.total > 0 ? Math.round(s.called / s.total * 100) : 0;
+  const filtered = filteredOwners(list);
+  const el  = document.getElementById('view-list');
+
+  const FILTERS = [
+    {k:'all',label:'All'},{k:'uncalled',label:'Uncalled'},{k:'connected',label:'Connected'},
+    {k:'voicemail',label:'Voicemail'},{k:'callback',label:'Callback'},{k:'selling',label:'Selling'},
+    {k:'buying',label:'Buying'},{k:'not_interested',label:'Not Interested'},
+    {k:'agent',label:'Agent'},{k:'dnc',label:'DNC'},{k:'invalid',label:'Invalid'},
+  ];
+
+  el.innerHTML = `
+    <div class="page-title" style="font-size:22px">${esc(list.name)}</div>
+    <div class="page-sub">${s.total} owners · ${pct}% called</div>
+    <div class="mb14">
+      <div class="prog-header">
+        <span class="prog-label">${s.called} called</span>
+        <span class="prog-count">${s.total - s.called} remaining</span>
+      </div>
+      <div class="prog-track"><div class="prog-fill" style="width:${pct}%"></div></div>
+      <div style="display:flex;gap:12px;font-size:11px;color:var(--g400);margin-top:4px;font-weight:600">
+        <span style="color:var(--green)">✓ ${s.connected} Connected</span>
+        <span style="color:var(--amber)">⟳ ${s.voicemail} VM</span>
+        <span style="color:var(--red)">✗ ${s.invalid} Invalid</span>
+        ${s.callback?`<span style="color:var(--p)">📅 ${s.callback} CB</span>`:''}
+      </div>
+    </div>
+    <div class="search-wrap">
+      <div class="search-ico">
+        <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+          <circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/>
+        </svg>
+      </div>
+      <input class="search-inp" id="search-inp" placeholder="Name, mobile, project, unit…" value="${esc(S.search)}"
+        oninput="S.search=this.value;renderList()">
+    </div>
+    <div class="filter-row">
+      ${FILTERS.map(f=>`<div class="fcip ${S.filter===f.k?'on':''}" onclick="S.filter='${f.k}';S.search='';document.getElementById('search-inp').value='';renderList()">${f.label}</div>`).join('')}
+    </div>
+    <div class="text-sm text-gray mb8">${filtered.length} owner${filtered.length!==1?'s':''}</div>
+    <div id="olist">
+      ${filtered.length === 0 ? `<div class="empty" style="padding:40px 20px"><div class="empty-ico">🔍</div><div class="empty-title">No results</div></div>` :
+        filtered.map(o => ownerRow(o, list.owners.indexOf(o))).join('')}
+    </div>`;
+}
+
+function filteredOwners(list) {
+  let o = list.owners;
+  if (S.search) {
+    const q = S.search.toLowerCase();
+    o = o.filter(x =>
+      (x.ownerName||'').toLowerCase().includes(q) ||
+      (x.mobile||'').includes(q) ||
+      (x.project||'').toLowerCase().includes(q) ||
+      (x.buildingName||'').toLowerCase().includes(q) ||
+      (x.unitNumber||'').toLowerCase().includes(q) ||
+      (x.area||'').toLowerCase().includes(q)
+    );
+  }
+  const f = S.filter;
+  if (f==='all')           return o;
+  if (f==='uncalled')      return o.filter(x => !x.callStatus && !x.doNotCall);
+  if (f==='connected')     return o.filter(x => x.callStatus === 'connected');
+  if (f==='voicemail')     return o.filter(x => ['voicemail','no_answer'].includes(x.callStatus));
+  if (f==='callback')      return o.filter(x => x.leadCategory === 'callback');
+  if (f==='selling')       return o.filter(x => x.leadCategory === 'selling');
+  if (f==='buying')        return o.filter(x => x.leadCategory === 'buying');
+  if (f==='not_interested')return o.filter(x => x.leadCategory === 'not_interested');
+  if (f==='agent')         return o.filter(x => x.agent);
+  if (f==='dnc')           return o.filter(x => x.doNotCall);
+  if (f==='invalid')       return o.filter(x => ['invalid','switched_off','closed'].includes(x.callStatus));
+  return o;
+}
+
+function ownerRow(o, idx) {
+  const sc = statusClass(o);
+  return `
+    <div class="orow s-${sc}" onclick="openOwnerCall(${idx})">
+      <div class="orow-av">${esc(initials(o.ownerName))}</div>
+      <div class="orow-info">
+        <div class="orow-name">${esc(o.ownerName)||'(No Name)'}</div>
+        <div class="orow-meta">${esc(o.mobile)||'—'} · ${esc(o.project)||'—'} · ${esc(o.buildingName)||'—'}${o.unitNumber?' #'+esc(o.unitNumber):''}</div>
+      </div>
+      <div class="sdot ${sc||'none'}"></div>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// CALLING SCREEN
+// ══════════════════════════════════════════════════════════════════
+function startCallingList(listId) { S.listId = listId; startCalling(); }
+
+function startCalling() {
+  const list = curList();
+  if (!list) return;
+  let idx = list.owners.findIndex(o => !o.callStatus && !o.doNotCall);
+  if (idx === -1) idx = 0;
+  list.lastUsed = Date.now();
+  persist();
+  nav('calling', {idx});
+}
+
+function openOwnerCall(idx) {
+  const list = curList();
+  if (!list) return;
+  list.lastUsed = Date.now();
+  nav('calling', {idx});
+}
+
+function ownerBadges(o) {
+  const parts = [];
+  if (o.doNotCall) parts.push(`<span class="bdg bdg-dark">⛔ DNC</span>`);
+  if (o.agent)     parts.push(`<span class="bdg bdg-blue">Agent</span>`);
+  if (o.callStatus) parts.push(`<span class="bdg ${statusBadgeCls(o)}">${statusLabel(o)}</span>`);
+  else if (o.leadCategory && !o.doNotCall && !o.agent)
+                   parts.push(`<span class="bdg ${statusBadgeCls(o)}">${statusLabel(o)}</span>`);
+  if (o.attempts > 0) parts.push(`<span class="attempts-tag">📞 ${o.attempts} attempt${o.attempts!==1?'s':''}</span>`);
+  return parts.join('');
+}
+
+function renderCalling() {
+  const list = curList();
+  if (!list) { nav('dashboard'); return; }
+  const owner = list.owners[S.ownerIdx];
+  if (!owner) { nav('list',{listId:S.listId}); return; }
+  const s   = stats(list);
+  const pct = s.total > 0 ? Math.round(s.called / s.total * 100) : 0;
+  const el  = document.getElementById('view-calling');
+
+  // Show retry banner if voicemail/no-answer selected and hasn't retried yet
+  const showRetry = ['voicemail','no_answer'].includes(owner.callStatus) && !owner.retryUsed;
+
+  const LEAD_BTNS = [
+    {k:'selling',       label:'🏷 Selling',       cls:'rbtn-selling'},
+    {k:'buying',        label:'🔑 Buying',         cls:'rbtn-buying'},
+    {k:'callback',      label:'📅 Call Back',      cls:'rbtn-callback'},
+    {k:'not_interested',label:'👎 Not Interested', cls:'rbtn-ni'},
+    {k:'agent',         label:'🧑‍💼 Agent',          cls:'rbtn-agent'},
+    {k:'do_not_call',   label:'⛔ Do Not Call',    cls:'rbtn-dnc'},
+  ];
+  const STAT_BTNS = [
+    {k:'connected',   label:'✓ Connected',    cls:'rbtn-connected'},
+    {k:'voicemail',   label:'📬 Voicemail',    cls:'rbtn-voicemail'},
+    {k:'no_answer',   label:'🔕 No Answer',    cls:'rbtn-no-answer'},
+    {k:'invalid',     label:'✗ Invalid No.',  cls:'rbtn-invalid'},
+    {k:'switched_off',label:'📵 Switched Off', cls:'rbtn-switched'},
+    {k:'closed',      label:'🚫 Closed No.',   cls:'rbtn-closed'},
+  ];
+
+  function isSel(type, k) {
+    if (type === 'lead') {
+      if (k === 'do_not_call') return owner.doNotCall;
+      if (k === 'agent') return owner.agent;
+      return owner.leadCategory === k;
+    }
+    return owner.callStatus === k;
+  }
+
+  el.innerHTML = `
+    ${owner.doNotCall ? `<div class="dnc-bar">⛔ Do Not Call — this owner will be skipped in auto-calling</div>` : ''}
+
+    <!-- Navigation -->
+    <div class="calling-nav">
+      <button class="btn btn-ghost btn-sm" onclick="moveOwner(-1)" ${S.ownerIdx===0?'disabled':''}>‹ Prev</button>
+      <div class="calling-nav-mid">
+        <div class="calling-pos">${S.ownerIdx + 1} / ${list.owners.length}</div>
+        <div class="calling-pos-sub">${s.called} called · ${list.owners.length - s.called} remaining</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="moveOwner(1)" ${S.ownerIdx>=list.owners.length-1?'disabled':''}>Next ›</button>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="prog-track mb14" style="height:4px">
+      <div class="prog-fill" style="width:${pct}%"></div>
+    </div>
+
+    <!-- Owner Card -->
+    <div class="owner-card">
+      <div class="owner-card-header">
+        <div class="owner-card-name">${esc(owner.ownerName)||'(No Name)'}</div>
+        <div class="phone-edit-wrap">
+          <div class="phone-edit-label">📞 Phone Number — tap to edit</div>
+          <input type="tel" id="phone-edit" class="phone-edit"
+            value="${esc(owner.mobile)}" placeholder="Enter number…"
+            oninput="onPhoneEdit(this.value)">
+          <div class="phone-edit-actions">
+            <button class="btn-save-phone" onclick="saveEditedPhone()">💾 Save Number</button>
+            <button class="btn-save-phone" onclick="reNormalizePhone()">🔄 Re-normalize</button>
+          </div>
+        </div>
+        <div class="owner-card-badges" id="owner-badges">${ownerBadges(owner)}</div>
+      </div>
+      <div class="owner-card-body">
+        <div class="details-grid">
+          <div class="d-item"><div class="d-label">Country</div><div class="d-val">${esc(owner.country)||'—'}</div></div>
+          <div class="d-item"><div class="d-label">Area</div><div class="d-val">${esc(owner.area)||'—'}</div></div>
+          <div class="d-item"><div class="d-label">Project</div><div class="d-val">${esc(owner.project)||'—'}</div></div>
+          <div class="d-item"><div class="d-label">Building</div><div class="d-val">${esc(owner.buildingName)||'—'}</div></div>
+          <div class="d-item"><div class="d-label">Unit No.</div><div class="d-val">${esc(owner.unitNumber)||'—'}</div></div>
+          <div class="d-item"><div class="d-label">Size</div><div class="d-val">${esc(owner.size)||'—'}</div></div>
+          <div class="d-item full"><div class="d-label">Procedure Value</div><div class="d-val">${esc(owner.procedureValue)||'—'}</div></div>
+          <div class="d-item"><div class="d-label">Date</div><div class="d-val">${esc(owner.date)||'—'}</div></div>
+          <div class="d-item"><div class="d-label">Last Called</div><div class="d-val">${owner.lastCalledAt?fmtDate(owner.lastCalledAt)+' '+fmtTime(owner.lastCalledAt):'—'}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- iOS tip -->
+    <div class="ios-tip">
+      📱 <strong>iPhone:</strong> Tap Call — iOS confirms then opens Phone app. After your call, swipe back to PropDial and mark the result below.
+    </div>
+
+    <!-- Call Button — uses live phone-edit value -->
+    <button onclick="callOwner()" class="btn btn-call btn-xl mb8">
+      Call ${esc(toTitleCase(owner.ownerName?.split(' ')[0] || 'Owner'))}
+    </button>
+    <button onclick="saveContact()" class="btn btn-secondary btn-block mb8" style="font-size:15px;font-weight:800;padding:14px">
+      👤 Save to iPhone Contacts
+    </button>
+    <button class="btn btn-ghost btn-block mb14" onclick="skipOwner()" style="font-size:13px">Skip → (no status saved)</button>
+
+    <!-- ── RETRY ONCE BANNER (appears after voicemail/no-answer) ── -->
+    ${showRetry ? `
+      <div class="retry-banner" id="retry-banner">
+        <div class="retry-banner-title">📬 Went to voicemail?</div>
+        <div class="retry-banner-sub">You get one retry before moving on. Tap below to call again — the banner disappears after use.</div>
+        <button onclick="doRetry()" class="btn-retry">
+          🔄 Retry Call Once
+        </button>
+      </div>` : (owner.retryUsed && ['voicemail','no_answer'].includes(owner.callStatus) ? `
+      <div style="background:var(--g100);border-radius:var(--r8);padding:10px 13px;margin-bottom:14px;font-size:13px;color:var(--g500);font-weight:600">
+        ✓ Retry used — mark final result below
+      </div>` : '')}
+
+    <!-- Notes — 4 tabs -->
+    <div class="section-label">Notes</div>
+    <div class="note-tab-row">
+      <button class="ntab ${S.noteTab==='call'?'on':''}" onclick="switchNoteTab('call')">📞 Call Notes</button>
+      <button class="ntab ${S.noteTab==='callback'?'on':''}" onclick="switchNoteTab('callback')">📅 Callback Notes</button>
+      <button class="ntab ${S.noteTab==='selling'?'on':''}" onclick="switchNoteTab('selling')">🏷 Selling Details</button>
+      <button class="ntab ${S.noteTab==='buying'?'on':''}" onclick="switchNoteTab('buying')">🔑 Buying Requirements</button>
+    </div>
+    <div class="note-pane ${S.noteTab==='call'?'show':''}" id="np-call">
+      <textarea class="notes-box mb14" placeholder="Call notes — what was discussed…" oninput="saveNote('call',this.value)">${esc(getNote(owner,'call'))}</textarea>
+    </div>
+    <div class="note-pane ${S.noteTab==='callback'?'show':''}" id="np-callback">
+      <textarea class="notes-box mb14" placeholder="Callback reason, what to discuss next time…" oninput="saveNote('callback',this.value)">${esc(getNote(owner,'callback'))}</textarea>
+    </div>
+    <div class="note-pane ${S.noteTab==='selling'?'show':''}" id="np-selling">
+      <textarea class="notes-box mb14" placeholder="Selling details — price expectation, timeline, motivation…" oninput="saveNote('selling',this.value)">${esc(getNote(owner,'selling'))}</textarea>
+    </div>
+    <div class="note-pane ${S.noteTab==='buying'?'show':''}" id="np-buying">
+      <textarea class="notes-box mb14" placeholder="Buying requirements — budget, area, size, preferences…" oninput="saveNote('buying',this.value)">${esc(getNote(owner,'buying'))}</textarea>
+    </div>
+
+    <!-- Callback date/time -->
+    <div id="cb-fields" style="display:${owner.leadCategory==='callback'?'block':'none'}">
+      <div class="section-label">Callback Schedule</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+        <div>
+          <label class="form-label">Date</label>
+          <input type="date" class="form-input" id="cb-date" value="${esc(owner.callbackDate)}" oninput="saveCallback()">
+        </div>
+        <div>
+          <label class="form-label">Time</label>
+          <input type="time" class="form-input" id="cb-time" value="${esc(owner.callbackTime)}" oninput="saveCallback()">
+        </div>
+      </div>
+    </div>
+
+    <!-- Lead Category -->
+    <div class="section-label">Lead Category</div>
+    <div class="result-grid result-grid-3 mb14" id="lead-grid">
+      ${LEAD_BTNS.map(b=>`<button class="rbtn ${b.cls} ${isSel('lead',b.k)?'sel':''}" onclick="setLead('${b.k}')">${b.label}</button>`).join('')}
+    </div>
+
+    <!-- Call Status -->
+    <div class="section-label">Call Status</div>
+    <div class="result-grid result-grid-3 mb14" id="status-grid">
+      ${STAT_BTNS.map(b=>`<button class="rbtn ${b.cls} ${isSel('status',b.k)?'sel':''}" onclick="setStatus('${b.k}')">${b.label}</button>`).join('')}
+    </div>
+
+    <!-- Save & Next -->
+    <button class="btn btn-primary btn-xl mb8" onclick="saveAndNext()">Save & Next →</button>
+    <button class="btn btn-ghost btn-block mb8" onclick="nav('list',{listId:S.listId})">← Back to List</button>
+    <div style="height:8px"></div>`;
+}
+
+// ── Note Tab Switching (no full re-render — just show/hide) ──────
+function switchNoteTab(tab) {
+  S.noteTab = tab;
+  ['call','callback','selling','buying'].forEach(t => {
+    const p = document.getElementById('np-'+t);
+    if (p) p.className = 'note-pane' + (t===tab?' show':'');
+  });
+  document.querySelectorAll('.ntab').forEach((btn,i) => {
+    const tabs = ['call','callback','selling','buying'];
+    btn.classList.toggle('on', tabs[i] === tab);
+  });
+}
+
+function saveNote(field, val) {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  o['note_'+field] = val;
+  persist();
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SAVE TO CONTACTS (vCard / .vcf)
+// On iPhone Safari, downloading a .vcf file triggers iOS to show
+// "Add Contact?" — no permissions or native APIs required.
+// ══════════════════════════════════════════════════════════════════
+
+function toTitleCase(str) {
+  // Converts "AHMAD MOHAMMED AL-RASHID" → "Ahmad Mohammed Al-Rashid"
+  return (str || '')
+    .toLowerCase()
+    .replace(/\b([a-z])/g, c => c.toUpperCase());
+}
+
+function vEscape(str) {
+  // Escape special chars for vCard 3.0 property values
+  return String(str || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '');
+}
+
+function saveContact() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+
+  const name      = toTitleCase(o.ownerName || 'Unknown Owner');
+  const nameParts = name.trim().split(/\s+/);
+  const firstName = nameParts[0] || '';
+  const lastName  = nameParts.slice(1).join(' ') || '';
+  const phone     = getCurrentPhone() || o.mobile || '';
+
+  // Build a clean notes block for the contact
+  const noteLines = [
+    o.country       ? `Country: ${o.country}`                 : '',
+    o.project       ? `Project: ${o.project}`                 : '',
+    o.buildingName  ? `Building: ${o.buildingName}`           : '',
+    o.unitNumber    ? `Unit Number: ${o.unitNumber}`          : '',
+    o.area          ? `Area: ${o.area}`                       : '',
+    o.size          ? `Size: ${o.size}`                       : '',
+    o.procedureValue? `Procedure Value: ${o.procedureValue}`  : '',
+    o.date          ? `Transaction Date: ${o.date}`           : '',
+  ].filter(Boolean);
+
+  // vCard NOTE field — lines joined with literal \n (vCard 3.0 line-break encoding)
+  const noteValue = noteLines.map(vEscape).join('\\n');
+
+  const lines = [
+    'BEGIN:VCARD',
+    'VERSION:3.0',
+    `FN:${vEscape(name)}`,
+    `N:${vEscape(lastName)};${vEscape(firstName)};;;`,
+    phone ? `TEL;TYPE=CELL:${vEscape(phone)}` : null,
+    noteLines.length ? `NOTE:${noteValue}` : null,
+    'END:VCARD',
+  ].filter(l => l !== null).join('\r\n');
+
+  const blob = new Blob([lines], { type: 'text/vcard;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = name.replace(/\s+/g, '_') + '.vcf';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast(`Contact ready — tap the file to add ${firstName} to iPhone Contacts`, 'ok');
+}
+
+// ── Phone Edit Helpers ───────────────────────────────────────────
+
+// Returns the current phone value from the editable field (falls back to owner.mobile)
+function getCurrentPhone() {
+  const inp = document.getElementById('phone-edit');
+  return inp ? inp.value.trim() : (curList()?.owners[S.ownerIdx]?.mobile || '');
+}
+
+// Called on every keystroke in the phone input — no save yet, just live
+function onPhoneEdit(val) {
+  // Nothing to do — callOwner() reads live from the input
+}
+
+// Save the edited number permanently to the owner record
+function saveEditedPhone() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  const val = getCurrentPhone();
+  if (!val) { toast('Enter a number first', 'err'); return; }
+  o.mobile = val;
+  persist();
+  toast('Number saved ✓', 'ok');
+}
+
+// Re-normalize the current number in the input using the owner's country
+function reNormalizePhone() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  const inp = document.getElementById('phone-edit');
+  if (!inp) return;
+  const normalized = normalizePhone(inp.value, o.country);
+  inp.value = normalized;
+  o.mobile = normalized;
+  persist();
+  toast('Re-normalized: ' + normalized, 'ok');
+}
+
+// Dial using the current phone input value
+function callOwner() {
+  const num = getCurrentPhone();
+  if (!num) { toast('No phone number', 'err'); return; }
+  recordAttempt();
+  window.location.href = 'tel:' + num;
+}
+
+// ── Retry Once ───────────────────────────────────────────────────
+function doRetry() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  o.retryUsed   = true;
+  o.attempts    = (o.attempts || 0) + 1;
+  o.lastCalledAt= Date.now();
+  o.callStatus  = null;  // Reset so user marks fresh result after retry
+  persist();
+  renderCalling();
+  // Dial using the current phone input value
+  const num = getCurrentPhone();
+  if (num) window.location.href = 'tel:' + num;
+}
+
+function recordAttempt() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  o.attempts    = (o.attempts || 0) + 1;
+  o.lastCalledAt= Date.now();
+  persist();
+  setTimeout(() => {
+    const bdg = document.getElementById('owner-badges');
+    if (bdg) bdg.innerHTML = ownerBadges(o);
+  }, 400);
+}
+
+function saveCallback() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+  const d = document.getElementById('cb-date');
+  const t = document.getElementById('cb-time');
+  if (d) o.callbackDate = d.value;
+  if (t) o.callbackTime = t.value;
+  persist();
+}
+
+function setLead(cat) {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+
+  if (cat === 'do_not_call') {
+    o.doNotCall    = !o.doNotCall;
+    o.leadCategory = o.doNotCall ? 'do_not_call' : null;
+    o.agent        = false;
+  } else if (cat === 'agent') {
+    o.agent        = !o.agent;
+    o.leadCategory = o.agent ? 'agent' : null;
+    o.doNotCall    = false;
+  } else {
+    o.leadCategory = (o.leadCategory === cat) ? null : cat;
+    o.doNotCall    = false;
+    o.agent        = false;
+  }
+  persist();
+
+  // Show/hide callback fields
+  const cbf = document.getElementById('cb-fields');
+  if (cbf) cbf.style.display = (o.leadCategory === 'callback') ? 'block' : 'none';
+
+  // Update lead grid selection
+  const LEAD_KEYS = ['selling','buying','callback','not_interested','agent','do_not_call'];
+  document.getElementById('lead-grid')?.querySelectorAll('.rbtn').forEach((btn,i) => {
+    const k = LEAD_KEYS[i];
+    btn.classList.toggle('sel',
+      k==='do_not_call' ? o.doNotCall : k==='agent' ? o.agent : o.leadCategory===k);
+  });
+
+  // DNC bar
+  const existing = document.querySelector('.dnc-bar');
+  if (o.doNotCall && !existing) {
+    document.getElementById('view-calling').insertAdjacentHTML('afterbegin',
+      `<div class="dnc-bar">⛔ Do Not Call — this owner will be skipped in auto-calling</div>`);
+  } else if (!o.doNotCall && existing) { existing.remove(); }
+
+  // Update badges
+  const bdg = document.getElementById('owner-badges');
+  if (bdg) bdg.innerHTML = ownerBadges(o);
+}
+
+function setStatus(st) {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx]; if (!o) return;
+
+  const prev = o.callStatus;
+  o.callStatus   = (o.callStatus === st) ? null : st;
+  if (o.callStatus === 'connected') o.callConnected = true;
+  persist();
+
+  // Update status grid
+  const STAT_KEYS = ['connected','voicemail','no_answer','invalid','switched_off','closed'];
+  document.getElementById('status-grid')?.querySelectorAll('.rbtn').forEach((btn,i) => {
+    btn.classList.toggle('sel', o.callStatus === STAT_KEYS[i]);
+  });
+
+  // Show/hide retry banner dynamically
+  const retryBanner  = document.getElementById('retry-banner');
+  const showRetry    = ['voicemail','no_answer'].includes(o.callStatus) && !o.retryUsed;
+  const retryArea    = document.getElementById('retry-banner') || document.querySelector('[id^="retry"]');
+
+  // Re-render retry section if voicemail/no-answer selected for the first time
+  if (showRetry && !retryBanner) {
+    // Insert retry banner before notes section
+    const notesLabel = document.querySelector('#view-calling .section-label');
+    if (notesLabel) {
+      notesLabel.insertAdjacentHTML('beforebegin', `
+        <div class="retry-banner" id="retry-banner">
+          <div class="retry-banner-title">📬 Went to voicemail?</div>
+          <div class="retry-banner-sub">You get one retry before moving on. Tap below to call again.</div>
+          <a href="tel:${esc(o.mobile)}" onclick="doRetry()" class="btn-retry">🔄 Retry Call Once</a>
+        </div>`);
+    }
+  } else if (!showRetry && retryBanner) {
+    retryBanner.remove();
+  }
+
+  // Update badges
+  const bdg = document.getElementById('owner-badges');
+  if (bdg) bdg.innerHTML = ownerBadges(o);
+}
+
+function saveAndNext() {
+  const list = curList(); if (!list) return;
+  const o = list.owners[S.ownerIdx];
+  if (o) { saveCallback(); persist(); toast('Saved ✓','ok'); }
+  moveOwner(1);
+}
+
+function moveOwner(dir) {
+  const list = curList(); if (!list) return;
+  let idx = S.ownerIdx + dir;
+  if (dir > 0) { while (idx < list.owners.length && list.owners[idx]?.doNotCall) idx++; }
+  if (idx < 0) idx = 0;
+  if (idx >= list.owners.length) { toast('🎉 End of list — all owners called!','ok'); nav('list',{listId:S.listId}); return; }
+  S.ownerIdx = idx;
+  renderCalling();
+  window.scrollTo(0,0);
+}
+
+function skipOwner() { moveOwner(1); }
+
+// ══════════════════════════════════════════════════════════════════
+// CALLBACKS VIEW
+// ══════════════════════════════════════════════════════════════════
+function renderCallbacks() {
+  const el = document.getElementById('view-callbacks');
+  const all = [];
+  S.lists.forEach(list => list.owners.forEach((o,i) => {
+    if (o.leadCategory === 'callback') all.push({o, list, idx:i});
+  }));
+
+  if (all.length === 0) {
+    el.innerHTML = `
+      <div class="page-title">Callbacks</div>
+      <div class="page-sub">Scheduled follow-ups</div>
+      <div class="empty">
+        <div class="empty-ico">📅</div>
+        <div class="empty-title">No callbacks</div>
+        <div class="empty-sub">Mark owners as "Call Back" during a call session to schedule them here</div>
+      </div>`;
+    return;
+  }
+
+  const now = new Date(); now.setHours(0,0,0,0);
+  const sortByDate = arr => [...arr].sort((a,b) => {
+    const da = new Date((a.o.callbackDate||'9999')+' '+(a.o.callbackTime||'00:00'));
+    const db = new Date((b.o.callbackDate||'9999')+' '+(b.o.callbackTime||'00:00'));
+    return da - db;
+  });
+
+  const overdue = sortByDate(all.filter(c => c.o.callbackDate && new Date(c.o.callbackDate) < now));
+  const today   = sortByDate(all.filter(c => c.o.callbackDate && new Date(c.o.callbackDate).toDateString() === now.toDateString()));
+  const future  = sortByDate(all.filter(c => c.o.callbackDate && new Date(c.o.callbackDate) > now));
+  const noDate  = all.filter(c => !c.o.callbackDate);
+
+  const cbCard = (c, od=false) => {
+    const when = c.o.callbackDate
+      ? new Date(c.o.callbackDate).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'}) + (c.o.callbackTime?' at '+c.o.callbackTime:'')
+      : 'No date set';
+    const note = getNote(c.o,'callback') || getNote(c.o,'call') || '';
+    return `
+      <div class="cb-card ${od?'overdue':''}" onclick="S.listId='${c.list.id}';nav('calling',{idx:${c.idx}})">
+        <div class="flex-b">
+          <div class="cb-card-name">${esc(c.o.ownerName)}</div>
+          ${od?'<span style="font-size:10px;font-weight:800;color:var(--red);background:var(--red-l);padding:2px 7px;border-radius:20px">OVERDUE</span>':''}
+        </div>
+        <div class="cb-card-time">📅 ${esc(when)}</div>
+        <div class="cb-card-list">${esc(c.list.name)} · ${esc(c.o.mobile)}</div>
+        ${note?`<div class="cb-card-note">${esc(note.slice(0,120))}${note.length>120?'…':''}</div>`:''}
+      </div>`;
+  };
+
+  el.innerHTML = `
+    <div class="page-title">Callbacks</div>
+    <div class="page-sub">${all.length} scheduled</div>
+    ${overdue.length?`<div class="section-label" style="color:var(--red)">Overdue · ${overdue.length}</div>${overdue.map(c=>cbCard(c,true)).join('')}<div class="hr"></div>`:''}
+    ${today.length?`<div class="section-label" style="color:var(--p)">Today · ${today.length}</div>${today.map(c=>cbCard(c)).join('')}<div class="hr"></div>`:''}
+    ${future.length?`<div class="section-label">Upcoming · ${future.length}</div>${future.map(c=>cbCard(c)).join('')}`:''}
+    ${noDate.length?`<div class="hr"></div><div class="section-label">No Date Set · ${noDate.length}</div>${noDate.map(c=>cbCard(c)).join('')}`:''}`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════
+// PROFILE & ADMIN SYSTEM
+// ══════════════════════════════════════════════════════════════════
+
+const PROFILE_KEY = 'PROPDIAL_PROFILE';
+const TICKETS_KEY = 'PROPDIAL_TICKETS';
+const ADMIN_HASH_KEY = 'PROPDIAL_ADMIN_HASH';
+
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}'); } catch { return {}; }
+}
+function saveProfileData(data) { localStorage.setItem(PROFILE_KEY, JSON.stringify(data)); }
+
+function loadTickets() {
+  try { return JSON.parse(localStorage.getItem(TICKETS_KEY) || '[]'); } catch { return []; }
+}
+function saveTickets(t) { localStorage.setItem(TICKETS_KEY, JSON.stringify(t)); }
+
+// SHA-256 via Web Crypto (async)
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// Profile photo picker — stores as base64 in localStorage
+function pickProfilePhoto() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const p = loadProfile(); p.photo = ev.target.result;
+      saveProfileData(p); renderProfile(); toast('Photo updated ✓','ok');
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+let _profSection = null; // which edit section is open
+let _adminUnlocked = false;
+
+function toggleProfSection(s) {
+  _profSection = _profSection === s ? null : s;
+  renderProfile();
+}
+
+function saveProfFields(fields) {
+  const p = loadProfile(); Object.assign(p, fields);
+  saveProfileData(p); _profSection = null; renderProfile(); toast('Saved ✓','ok');
+}
+
+async function changeProfPassword() {
+  const p   = loadProfile();
+  const cur = document.getElementById('pw-cur')?.value || '';
+  const nw  = document.getElementById('pw-new')?.value || '';
+  const cn  = document.getElementById('pw-cfm')?.value || '';
+  if (p.passwordHash) {
+    if (await sha256(cur) !== p.passwordHash) { toast('Current password incorrect','err'); return; }
+  }
+  if (nw.length < 6) { toast('Minimum 6 characters','err'); return; }
+  if (nw !== cn)     { toast('Passwords do not match','err'); return; }
+  p.passwordHash = await sha256(nw);
+  saveProfileData(p); _profSection = null; renderProfile(); toast('Password updated ✓','ok');
+}
+
+async function sendResetRequest() {
+  const email = document.getElementById('reset-email')?.value.trim() || '';
+  if (!email) { toast('Enter your email address','err'); return; }
+  const sub  = encodeURIComponent('[PropDial] Password Reset Request');
+  const body = encodeURIComponent(`Password reset requested for account: ${email}\n\nPlease contact this user to reset their PropDial password.`);
+  window.location.href = `mailto:support@propdial.app?subject=${sub}&body=${body}`;
+  _profSection = null; renderProfile();
+  toast('Reset request sent to support','ok');
+}
+
+async function submitSupportTicket() {
+  const subject = document.getElementById('tkt-subject')?.value.trim() || '';
+  const body    = document.getElementById('tkt-body')?.value.trim() || '';
+  if (!subject) { toast('Add a subject','err'); return; }
+  if (body.length < 10) { toast('Please describe your issue','err'); return; }
+  const prof = loadProfile();
+  const ticket = {
+    id: 'TKT-' + Date.now(),
+    subject, body,
+    name: prof.name  || 'Unknown User',
+    from: prof.email || 'no-email',
+    date: new Date().toISOString(),
+    status: 'open',
+  };
+  const tickets = loadTickets(); tickets.unshift(ticket); saveTickets(tickets);
+  // Open Mail app with pre-filled support email
+  const mailSub  = encodeURIComponent('[PropDial Support] ' + subject);
+  const mailBody = encodeURIComponent(
+    `Ticket ID: ${ticket.id}\nFrom: ${ticket.name} (${ticket.from})\nDate: ${new Date().toLocaleString()}\n\n${body}`
+  );
+  window.location.href = `mailto:zainwilkins@gmail.com?subject=${mailSub}&body=${mailBody}`;
+  _profSection = null; renderProfile();
+  toast('Ticket saved — Mail app opening to send','ok');
+}
+
+function clearAllData() {
+  if (!confirm('Delete ALL data? This cannot be undone.')) return;
+  localStorage.clear(); S.lists = []; S.listId = null; S.ownerIdx = 0;
+  _profSection = null; _adminUnlocked = false;
+  persist(); nav('dashboard'); toast('All data cleared','ok');
+}
+
+// ── Admin panel ──────────────────────────────────────────────────
+
+async function tryAdminLogin() {
+  const pw   = document.getElementById('admin-pw-inp')?.value || '';
+  if (!pw) { toast('Enter admin password','err'); return; }
+  const hash   = await sha256(pw);
+  const stored = localStorage.getItem(ADMIN_HASH_KEY);
+  // First-time login: default password is  PropDial@Admin2024
+  const defaultHash = await sha256('PropDial@Admin2024');
+  const match  = stored ? hash === stored : hash === defaultHash;
+  if (match) {
+    _adminUnlocked = true; _profSection = null;
+    renderProfile(); toast('Admin access granted','ok');
+  } else {
+    toast('Incorrect password','err');
+  }
+}
+
+function adminLogout() {
+  _adminUnlocked = false; renderProfile(); toast('Admin session ended','ok');
+}
+
+async function adminChangePassword() {
+  const nw = document.getElementById('adm-pw-new')?.value || '';
+  const cn = document.getElementById('adm-pw-cfm')?.value || '';
+  if (nw.length < 8) { toast('Min. 8 characters','err'); return; }
+  if (nw !== cn)     { toast('Passwords do not match','err'); return; }
+  localStorage.setItem(ADMIN_HASH_KEY, await sha256(nw));
+  _profSection = null; renderProfile(); toast('Admin password updated ✓','ok');
+}
+
+function adminSetTicketStatus(id, status) {
+  const tickets = loadTickets();
+  const t = tickets.find(x => x.id === id);
+  if (t) { t.status = status; saveTickets(tickets); renderProfile(); }
+}
+
+function adminDeleteTicket(id) {
+  saveTickets(loadTickets().filter(x => x.id !== id));
+  renderProfile(); toast('Ticket deleted','ok');
+}
+
+// ── Render functions ─────────────────────────────────────────────
+
+function renderProfile() {
+  const el = document.getElementById('view-profile'); if (!el) return;
+  if (_adminUnlocked) { renderAdminPanel(el); return; }
+
+  const prof    = loadProfile();
+  const tickets = loadTickets();
+  const myTkts  = tickets.slice(0, 10); // show all from this device
+
+  const avatarInner = prof.photo
+    ? `<img src="${prof.photo}" alt="photo">`
+    : `<span style="font-size:38px">${prof.name ? esc(prof.name.charAt(0).toUpperCase()) : '👤'}</span>`;
+
+  const fld = (id, type, val, ph) =>
+    `<div class="prof-field"><label>${id}</label>` +
+    `<input id="pf-${id.toLowerCase().replace(/\s/g,'-')}" type="${type}" value="${esc(val||'')}" placeholder="${ph}"></div>`;
+
+  el.innerHTML = `
+    <!-- Hero -->
+    <div class="prof-hero">
+      <div class="prof-avatar-wrap">
+        <div class="prof-avatar" onclick="pickProfilePhoto()">${avatarInner}</div>
+        <div class="prof-avatar-edit" onclick="pickProfilePhoto()">✏️</div>
+      </div>
+      <div class="prof-name">${esc(prof.name || 'Your Name')}</div>
+      <div class="prof-tagline">${esc(prof.email || 'Tap Account Details to set up your profile')}</div>
+    </div>
+
+    <!-- Account Details -->
+    <div class="prof-section">
+      <div class="prof-section-label">Account Details</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('account')">
+          <div class="prof-row-ico">👤</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Full Name</div>
+            <div class="prof-row-value${!prof.name?' muted':''}">${esc(prof.name||'Tap to add')}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        <div class="prof-row" onclick="toggleProfSection('account')">
+          <div class="prof-row-ico">✉️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Email Address</div>
+            <div class="prof-row-value${!prof.email?' muted':''}">${esc(prof.email||'Tap to add')}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        <div class="prof-row" onclick="toggleProfSection('account')">
+          <div class="prof-row-ico">📱</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Phone Number</div>
+            <div class="prof-row-value${!prof.phone?' muted':''}">${esc(prof.phone||'Tap to add')}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='account'?`
+          <div class="prof-form">
+            <div class="prof-field"><label>Full Name</label>
+              <input id="pf-name" type="text" value="${esc(prof.name||'')}" placeholder="Your full name"></div>
+            <div class="prof-field"><label>Email Address</label>
+              <input id="pf-email" type="email" value="${esc(prof.email||'')}" placeholder="your@email.com"></div>
+            <div class="prof-field"><label>Phone Number</label>
+              <input id="pf-phone" type="tel" value="${esc(prof.phone||'')}" placeholder="+971 50 000 0000"></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="saveProfFields({
+                name:document.getElementById('pf-name').value,
+                email:document.getElementById('pf-email').value,
+                phone:document.getElementById('pf-phone').value
+              })">Save Changes</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('account')">Cancel</button>
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="prof-section">
+      <div class="prof-section-label">Security</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('password')">
+          <div class="prof-row-ico">🔐</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">${prof.passwordHash?'Change Password':'Set Password'}</div>
+            <div class="prof-row-value">${prof.passwordHash?'••••••••••':'Not configured'}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='password'?`
+          <div class="prof-form">
+            ${prof.passwordHash?`<div class="prof-field"><label>Current Password</label>
+              <input id="pw-cur" type="password" placeholder="Enter current password"></div>`:''}
+            <div class="prof-field"><label>New Password</label>
+              <input id="pw-new" type="password" placeholder="Minimum 6 characters"></div>
+            <div class="prof-field"><label>Confirm New Password</label>
+              <input id="pw-cfm" type="password" placeholder="Repeat new password"></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="changeProfPassword()">Update Password</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('password')">Cancel</button>
+            </div>
+          </div>` : ''}
+        <div class="prof-row" onclick="toggleProfSection('resetpw')">
+          <div class="prof-row-ico">🔑</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Forgot Password</div>
+            <div class="prof-row-value">Request a reset via support</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='resetpw'?`
+          <div class="prof-form">
+            <div style="font-size:13px;color:var(--g700);line-height:1.5;margin-bottom:12px">
+              Enter your email and support will send you a reset link.
+            </div>
+            <div class="prof-field"><label>Your Email</label>
+              <input id="reset-email" type="email" value="${esc(prof.email||'')}" placeholder="your@email.com"></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="sendResetRequest()">Send Reset Request</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('resetpw')">Cancel</button>
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Support -->
+    <div class="prof-section">
+      <div class="prof-section-label">Support</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('support')">
+          <div class="prof-row-ico">💬</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Contact Support</div>
+            <div class="prof-row-value">Submit a support query</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='support'?`
+          <div class="prof-form">
+            <div class="prof-field"><label>Subject</label>
+              <input id="tkt-subject" type="text" placeholder="Brief description of your issue"></div>
+            <div class="prof-field"><label>Message</label>
+              <textarea id="tkt-body" placeholder="Please describe your issue in detail…"></textarea></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="submitSupportTicket()">Send Query</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('support')">Cancel</button>
+            </div>
+          </div>` : ''}
+        ${myTkts.length>0?`
+          <div class="prof-row" onclick="toggleProfSection('mytickets')">
+            <div class="prof-row-ico">📋</div>
+            <div class="prof-row-content">
+              <div class="prof-row-label">My Tickets</div>
+              <div class="prof-row-value">${myTkts.length} submitted</div>
+            </div>
+            <div class="prof-row-action">›</div>
+          </div>
+          ${_profSection==='mytickets'?`
+            <div class="prof-form" style="background:var(--white);padding:12px">
+              ${myTkts.map(t=>`
+                <div class="ticket-card">
+                  <div class="ticket-subject">${esc(t.subject)}</div>
+                  <div class="ticket-meta">${new Date(t.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
+                  <div class="ticket-body">${esc(t.body.slice(0,140))}${t.body.length>140?'…':''}</div>
+                  <span class="ticket-badge ${t.status}">${t.status==='open'?'Open':'Resolved'}</span>
+                </div>`).join('')}
+            </div>` : ''}` : ''}
+        <div class="prof-row" onclick="window.location.href='mailto:zainwilkins@gmail.com'">
+          <div class="prof-row-ico">✉️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Email Support Directly</div>
+            <div class="prof-row-value muted">zainwilkins@gmail.com</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- App -->
+    <div class="prof-section">
+      <div class="prof-section-label">App</div>
+      <div class="prof-card">
+        <div class="prof-row">
+          <div class="prof-row-ico">ℹ️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Version</div>
+            <div class="prof-row-value">PropDial v1.0 · Beta</div>
+          </div>
+        </div>
+        <div class="prof-row" onclick="toggleProfSection('cleardata')">
+          <div class="prof-row-ico danger">🗑️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Clear All Data</div>
+            <div class="prof-row-value" style="color:var(--red)">Delete all lists and profile</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='cleardata'?`
+          <div class="prof-form">
+            <div style="font-size:13px;color:var(--red);font-weight:700;margin-bottom:12px;line-height:1.5">
+              ⚠️ This permanently deletes all call lists, owner data, notes, and your profile. This cannot be undone.
+            </div>
+            <button class="prof-btn-danger" onclick="clearAllData()">Delete Everything</button>
+            <button class="prof-btn-cancel" style="width:100%;margin-top:8px;padding:11px;text-align:center" onclick="toggleProfSection('cleardata')">Cancel</button>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Admin Access -->
+    <div class="prof-section">
+      <div class="prof-section-label">Owner</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('adminlogin')">
+          <div class="prof-row-ico admin">🛡️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Admin Panel</div>
+            <div class="prof-row-value muted">Owner access only</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='adminlogin'?`
+          <div class="prof-form" style="background:#0f172a">
+            <div style="color:rgba(255,255,255,.6);font-size:12px;font-weight:700;letter-spacing:.5px;margin-bottom:12px">
+              🛡️ ADMIN AUTHENTICATION
+            </div>
+            <div class="prof-field">
+              <label style="color:rgba(255,255,255,.5)">Admin Password</label>
+              <input id="admin-pw-inp" type="password" placeholder="Enter admin password"
+                style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#fff">
+            </div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" style="background:#6366f1" onclick="tryAdminLogin()">Access Panel</button>
+              <button class="prof-btn-cancel" style="background:rgba(255,255,255,.08);color:#fff" onclick="toggleProfSection('adminlogin')">Cancel</button>
+            </div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:10px;text-align:center">
+              Default password: PropDial@Admin2024<br>Change it after first login.
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <div style="height:100px"></div>`;
+}
+
+// ── Admin panel renderer ─────────────────────────────────────────
+
+function renderAdminPanel(el) {
+  const prof    = loadProfile();
+  const tickets = loadTickets();
+  const totalOwners  = S.lists.reduce((a,l)=>a+l.owners.length,0);
+  const totalCalled  = S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.attempts>0).length,0);
+  const totalConn    = S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callStatus==='connected').length,0);
+  const openTickets  = tickets.filter(t=>t.status==='open').length;
+
+  // Build user list — currently 1 user per device (localStorage).
+  // When a backend is connected, this array will be fetched from the server.
+  const users = [{
+    id: 'usr-local',
+    name:  prof.name  || null,
+    email: prof.email || null,
+    phone: prof.phone || null,
+    photo: prof.photo || null,
+    passwordSet: !!prof.passwordHash,
+    joinedAt: prof.joinedAt || null,
+    lists: S.lists.length,
+    callsMade: totalCalled,
+    device: 'This device',
+  }];
+
+  // Store joinedAt on first admin view if not already set
+  if (!prof.joinedAt) {
+    prof.joinedAt = new Date().toISOString();
+    saveProfileData(prof);
+  }
+
+  el.innerHTML = `
+    <!-- Admin hero -->
+    <div class="admin-hero">
+      <div class="admin-chip">⚡ Admin Mode</div>
+      <div class="admin-title">PropDial Control Panel</div>
+      <div class="admin-sub">Private owner dashboard — not visible to users</div>
+      <div class="admin-stats">
+        <div class="admin-stat"><div class="admin-stat-n">${users.length}</div><div class="admin-stat-l">Users</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${totalOwners}</div><div class="admin-stat-l">Total Owners</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${totalCalled}</div><div class="admin-stat-l">Calls Made</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${openTickets}</div><div class="admin-stat-l">Open Tickets</div></div>
+      </div>
+    </div>
+
+    <!-- Users section -->
+    <div class="admin-section">
+      <div class="admin-section-label">Users — ${users.length} registered</div>
+      ${users.map((u,i) => `
+        <div class="admin-user-card">
+          <!-- User header -->
+          <div class="admin-user-head">
+            <div class="admin-user-av">
+              ${u.photo
+                ? `<img src="${u.photo}" style="width:100%;height:100%;object-fit:cover;border-radius:50%">`
+                : `<span>${u.name ? esc(u.name.charAt(0).toUpperCase()) : '?'}</span>`}
+            </div>
+            <div class="admin-user-meta">
+              <div class="admin-user-name">${esc(u.name||'No name set')}</div>
+              <div class="admin-user-id">User #${i+1} · ${esc(u.device)}</div>
+            </div>
+            <div class="admin-user-status ${u.name&&u.email?'active':'incomplete'}">
+              ${u.name&&u.email?'Active':'Incomplete'}
+            </div>
+          </div>
+          <!-- Credentials table -->
+          <div class="admin-cred-table">
+            <div class="admin-cred-row">
+              <div class="admin-cred-label">Full Name</div>
+              <div class="admin-cred-value ${!u.name?'unset':''}">${esc(u.name||'Not set')}</div>
+            </div>
+            <div class="admin-cred-row">
+              <div class="admin-cred-label">Email Address</div>
+              <div class="admin-cred-value ${!u.email?'unset':''}">${esc(u.email||'Not set')}</div>
+            </div>
+            <div class="admin-cred-row">
+              <div class="admin-cred-label">Phone Number</div>
+              <div class="admin-cred-value ${!u.phone?'unset':''}">${esc(u.phone||'Not set')}</div>
+            </div>
+            <div class="admin-cred-row">
+              <div class="admin-cred-label">Password</div>
+              <div class="admin-cred-value">
+                ${u.passwordSet
+                  ? '<span style="color:var(--green);font-weight:800">✓ Set (SHA-256 hashed)</span>'
+                  : '<span style="color:var(--amber);font-weight:800">⚠ Not configured</span>'}
+              </div>
+            </div>
+            <div class="admin-cred-row">
+              <div class="admin-cred-label">Profile Photo</div>
+              <div class="admin-cred-value">
+                ${u.photo
+                  ? '<span style="color:var(--green);font-weight:800">✓ Uploaded</span>'
+                  : '<span style="color:var(--g400)">Not uploaded</span>'}
+              </div>
+            </div>
+            <div class="admin-cred-row">
+              <div class="admin-cred-label">Joined</div>
+              <div class="admin-cred-value">${u.joinedAt ? new Date(u.joinedAt).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'}) : 'Unknown'}</div>
+            </div>
+            <div class="admin-cred-row">
+              <div class="admin-cred-label">Call Lists</div>
+              <div class="admin-cred-value">${u.lists}</div>
+            </div>
+            <div class="admin-cred-row" style="border-bottom:none">
+              <div class="admin-cred-label">Calls Made</div>
+              <div class="admin-cred-value">${u.callsMade}</div>
+            </div>
+          </div>
+          <div style="padding:10px 14px;background:var(--g50);border-top:1px solid var(--g200);font-size:11px;color:var(--g400);font-weight:600;text-align:center">
+            📌 Multi-device user sync requires backend integration
+          </div>
+        </div>`).join('')}
+    </div>
+
+    <!-- Call lists summary -->
+    <div class="admin-section">
+      <div class="admin-section-label">Call Lists (${S.lists.length})</div>
+      <div class="admin-card">
+        ${S.lists.length===0?`<div class="prof-row"><div class="prof-row-content"><div class="prof-row-value muted">No lists uploaded</div></div></div>`
+          : S.lists.map(list=>{
+            const called = list.owners.filter(o=>o.attempts>0).length;
+            const conn   = list.owners.filter(o=>o.callStatus==='connected').length;
+            const vm     = list.owners.filter(o=>o.callStatus==='voicemail').length;
+            const dnc    = list.owners.filter(o=>o.doNotCall).length;
+            return `<div class="prof-row">
+              <div class="prof-row-ico">📋</div>
+              <div class="prof-row-content">
+                <div class="prof-row-label">${esc(list.name)}</div>
+                <div class="prof-row-value" style="font-size:12px;font-weight:600;color:var(--g500)">
+                  ${list.owners.length} owners · ${called} called · ${conn} connected · ${vm} VM · ${dnc} DNC
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+      </div>
+    </div>
+
+    <!-- Calling stats -->
+    <div class="admin-section">
+      <div class="admin-section-label">Calling Statistics</div>
+      <div class="admin-card">
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--green-l);color:var(--green)">✓</div>
+          <div class="prof-row-content"><div class="prof-row-label">Connected</div><div class="prof-row-value">${totalConn}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--amber-l);color:var(--amber)">📬</div>
+          <div class="prof-row-content"><div class="prof-row-label">Voicemail</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callStatus==='voicemail').length,0)}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--red-l);color:var(--red)">⛔</div>
+          <div class="prof-row-content"><div class="prof-row-label">Do Not Call</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.doNotCall).length,0)}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--blue-l);color:var(--blue)">🧑‍💼</div>
+          <div class="prof-row-content"><div class="prof-row-label">Agents Identified</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.agent).length,0)}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico">📅</div>
+          <div class="prof-row-content"><div class="prof-row-label">Callbacks Scheduled</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callbackDate).length,0)}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support tickets -->
+    <div class="admin-section">
+      <div class="admin-section-label">Support Tickets (${tickets.length} total · ${openTickets} open)</div>
+      <div class="admin-card">
+        ${tickets.length===0
+          ? `<div class="prof-row"><div class="prof-row-content"><div class="prof-row-value muted">No tickets yet</div></div></div>`
+          : tickets.map(t=>`
+            <div class="admin-ticket">
+              <div class="admin-ticket-head">
+                <div class="admin-ticket-subject">${esc(t.subject)}</div>
+                <span class="ticket-badge ${t.status}">${t.status==='open'?'Open':'Resolved'}</span>
+              </div>
+              <div class="admin-ticket-from">${esc(t.name)} · ${esc(t.from)} · ${new Date(t.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
+              <div class="admin-ticket-body">${esc(t.body)}</div>
+              <div class="admin-ticket-actions">
+                ${t.status==='open'
+                  ? `<button class="admin-act-btn green" onclick="adminSetTicketStatus('${t.id}','resolved')">✓ Resolve</button>`
+                  : `<button class="admin-act-btn" onclick="adminSetTicketStatus('${t.id}','open')">Re-open</button>`}
+                <button class="admin-act-btn blue" onclick="window.location.href='mailto:${esc(t.from)}?subject=${encodeURIComponent('Re: '+t.subject)}'">✉ Reply</button>
+                <button class="admin-act-btn red" onclick="adminDeleteTicket('${t.id}')">Delete</button>
+              </div>
+            </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Admin security -->
+    <div class="admin-section">
+      <div class="admin-section-label">Admin Security</div>
+      <div class="admin-card">
+        <div class="prof-row" onclick="toggleProfSection('adminpw')">
+          <div class="prof-row-ico admin">🔑</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Change Admin Password</div>
+            <div class="prof-row-value muted">Update access credentials</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='adminpw'?`
+          <div class="prof-form" style="background:#0f172a">
+            <div class="prof-field">
+              <label style="color:rgba(255,255,255,.5)">New Admin Password</label>
+              <input id="adm-pw-new" type="password" placeholder="Min. 8 characters"
+                style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#fff">
+            </div>
+            <div class="prof-field">
+              <label style="color:rgba(255,255,255,.5)">Confirm Password</label>
+              <input id="adm-pw-cfm" type="password" placeholder="Repeat new password"
+                style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#fff">
+            </div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" style="background:#6366f1" onclick="adminChangePassword()">Update Password</button>
+              <button class="prof-btn-cancel" style="background:rgba(255,255,255,.08);color:#fff" onclick="toggleProfSection('adminpw')">Cancel</button>
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <button class="admin-exit-btn" onclick="adminLogout()">✕ Exit Admin Panel</button>
+    <div style="height:100px"></div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════
+// LIST OPTIONS SHEET
+// ══════════════════════════════════════════════════════════════════
+function showListMenu() { showListOptions(S.listId); }
+
+function showListOptions(listId) {
+  const list = getList(listId); if (!list) return;
+  const s = stats(list);
+  openSheet(`
+    <div class="sheet-title">${esc(list.name)}</div>
+    <div style="font-size:13px;color:var(--g500);margin-bottom:16px">${s.total} owners · ${s.called} called · ${s.connected} connected · ${s.callback} callbacks</div>
+    <button class="btn btn-ghost btn-block mb8" onclick="renameList('${listId}')">✏️ Rename List</button>
+    <button class="btn btn-ghost btn-block mb8" onclick="duplicateList('${listId}')">⎘ Duplicate (Clean Copy)</button>
+    <button class="btn btn-ghost btn-block mb8" onclick="exportList('${listId}')">⬇ Export to Excel (Color Coded)</button>
+    <div class="hr"></div>
+    <button class="btn btn-danger btn-block" onclick="deleteList('${listId}')">🗑 Delete List</button>`);
+}
+
+function renameList(listId) {
+  const list = getList(listId); if (!list) return;
+  const name = prompt('Rename list:', list.name);
+  if (name?.trim()) { list.name = name.trim(); persist(); closeSheet(); toast('List renamed','ok'); renderView(S.view); }
+}
+
+function duplicateList(listId) {
+  const list = getList(listId); if (!list) return;
+  const copy = JSON.parse(JSON.stringify(list));
+  copy.id = uid(); copy.name = list.name+' (Copy)';
+  copy.uploadDate = Date.now(); copy.lastUsed = null;
+  copy.owners = copy.owners.map(o => ({
+    ...o, id:uid(), callStatus:null, leadCategory:null,
+    note_call:'', note_callback:'', note_selling:'', note_buying:'',
+    callbackDate:'', callbackTime:'', attempts:0, retryUsed:false,
+    lastCalledAt:null, callConnected:false, doNotCall:false,
+    agent:false, finalResult:'', history:[]
+  }));
+  S.lists.unshift(copy);
+  persist(); closeSheet(); toast(`"${copy.name}" created`,'ok'); nav('dashboard');
+}
+
+function deleteList(listId) {
+  if (!confirm('Delete this list permanently? This cannot be undone.')) return;
+  S.lists = S.lists.filter(l => l.id !== listId);
+  if (S.listId === listId) S.listId = null;
+  persist(); closeSheet(); toast('List deleted','ok'); nav('dashboard');
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EXCEL EXPORT — COLOR CODED via ExcelJS
+// ExcelJS supports full cell fill colors, unlike SheetJS community.
+// ARGB format: FF + hex color (e.g. FFDCFCE7 = green-100 fully opaque)
+// ══════════════════════════════════════════════════════════════════
+async function exportList(listId) {
+  const list = getList(listId); if (!list) return;
+  closeSheet();
+
+  // Show loading feedback
+  toast('Building export…');
+
+  try {
+    const wb = new ExcelJS.Workbook();
+    wb.creator   = 'PropDial';
+    wb.created   = new Date();
+    const ws = wb.addWorksheet('Owners', { views: [{ state: 'frozen', ySplit: 1 }] });
+
+    // ── Column definitions ────────────────────────────────────────
+    const EXPORT_COLS = [
+      ...COLS,
+      'Call Status','Lead Category','Notes (Call)','Notes (Callback)',
+      'Notes (Selling)','Notes (Buying)','Callback Date','Callback Time',
+      'Attempts','Retry Used','Last Called At',
+      'Call Connected','Do Not Call','Agent','Final Result',
+    ];
+
+    ws.columns = EXPORT_COLS.map((h,i) => ({
+      header:h,
+      key:`c${i}`,
+      width: [7,13,8,14,13,6,9,11,6,7,12,7].includes(i) ? 18 : h.includes('Notes') ? 32 : 16,
+    }));
+
+    // ── Style header row ──────────────────────────────────────────
+    const headerRow = ws.getRow(1);
+    headerRow.eachCell(cell => {
+      cell.fill   = { type:'pattern', pattern:'solid', fgColor:{argb:'FF4C1D95'} };
+      cell.font   = { bold:true, color:{argb:'FFFFFFFF'}, size:11 };
+      cell.border = { bottom:{ style:'thin', color:{argb:'FF6D28D9'} } };
+      cell.alignment = { vertical:'middle', horizontal:'center' };
+    });
+    headerRow.height = 22;
+
+    // ── Row color map ─────────────────────────────────────────────
+    // ARGB: FF = fully opaque
+    function getRowArgb(o) {
+      if (o.doNotCall)                                                      return 'FFE5E7EB'; // gray-200
+      if (o.agent)                                                          return 'FFDBEAFE'; // blue-100
+      if (o.leadCategory === 'selling')                                     return 'FFD1FAE5'; // green-100
+      if (o.leadCategory === 'buying')                                      return 'FFE0F2FE'; // sky-100
+      if (o.leadCategory === 'callback')                                    return 'FFEDE9FE'; // purple-100
+      if (o.leadCategory === 'not_interested')                              return 'FFF3F4F6'; // gray-100
+      if (o.callStatus === 'connected')                                     return 'FFD1FAE5'; // green-100
+      if (['voicemail','no_answer'].includes(o.callStatus))                 return 'FFFEF3C7'; // amber-100
+      if (['invalid','switched_off','closed'].includes(o.callStatus))       return 'FFFEE2E2'; // red-100
+      return null; // no fill
+    }
+
+    // ── Add data rows ─────────────────────────────────────────────
+    list.owners.forEach((o, ri) => {
+      const allNotes = [
+        getNote(o,'call'),getNote(o,'callback'),getNote(o,'selling'),getNote(o,'buying')
+      ].filter(Boolean).join(' | ');
+
+      const row = ws.addRow([
+        o.date, o.procedureValue, o.area, o.project, o.buildingName,
+        o.size, o.unitNumber, o.ownerName, o.mobile, o.country,
+        o.callStatus || '',
+        o.agent ? 'agent' : o.doNotCall ? 'do_not_call' : (o.leadCategory || ''),
+        getNote(o,'call'),
+        getNote(o,'callback'),
+        getNote(o,'selling'),
+        getNote(o,'buying'),
+        o.callbackDate || '',
+        o.callbackTime || '',
+        o.attempts || 0,
+        o.retryUsed ? 'Yes' : 'No',
+        o.lastCalledAt ? new Date(o.lastCalledAt).toLocaleString('en-GB') : '',
+        o.callConnected ? 'Yes' : 'No',
+        o.doNotCall ? 'Yes' : 'No',
+        o.agent ? 'Yes' : 'No',
+        statusLabel(o),
+      ]);
+
+      // Apply row fill color
+      const argb = getRowArgb(o);
+      if (argb) {
+        row.eachCell(cell => {
+          cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb} };
+        });
+      }
+
+      // Alternate subtle stripe for uncolored rows
+      if (!argb && ri % 2 === 1) {
+        row.eachCell(cell => {
+          cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFF9FAFB'} };
+        });
+      }
+
+      row.alignment = { vertical:'top', wrapText:true };
+      row.height = 18;
+    });
+
+    // ── Auto-filter on header ─────────────────────────────────────
+    ws.autoFilter = { from:'A1', to:{ row:1, column:EXPORT_COLS.length } };
+
+    // ── Generate & download ───────────────────────────────────────
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob   = new Blob([buffer], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+    const url    = URL.createObjectURL(blob);
+    const a      = document.createElement('a');
+    a.href       = url;
+    a.download   = list.name.replace(/[^\w\s-]/g,'').trim().replace(/\s+/g,'_') + '_export.xlsx';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Color-coded Excel exported ✓','ok');
+
+  } catch(err) {
+    console.error(err);
+    toast('Export failed — check console','err');
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+restore();
+nav('dashboard');
+</script>
+</body>
+</html>
