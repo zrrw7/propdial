@@ -243,6 +243,168 @@ a{color:inherit;text-decoration:none}
   font-size:11px;color:rgba(255,255,255,.6);font-weight:600;
   display:flex;align-items:center;gap:4px;
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   PROFILE VIEW
+═══════════════════════════════════════════════════════════════ */
+.prof-hero{
+  background:linear-gradient(160deg,var(--p-dark) 0%,var(--p) 55%,var(--p-mid) 100%);
+  padding:36px 20px 28px;text-align:center;color:#fff;
+  border-radius:0 0 var(--r24) var(--r24);margin-bottom:20px;
+}
+.prof-avatar-wrap{position:relative;display:inline-block;margin-bottom:14px}
+.prof-avatar{
+  width:90px;height:90px;border-radius:50%;
+  background:rgba(255,255,255,.18);border:3px solid rgba(255,255,255,.5);
+  display:flex;align-items:center;justify-content:center;
+  font-size:38px;overflow:hidden;cursor:pointer;
+}
+.prof-avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.prof-avatar-edit{
+  position:absolute;bottom:0;right:0;width:28px;height:28px;border-radius:50%;
+  background:var(--white);color:var(--p);
+  display:flex;align-items:center;justify-content:center;
+  font-size:14px;box-shadow:var(--sh2);border:2px solid var(--p-light);cursor:pointer;
+}
+.prof-name{font-size:22px;font-weight:900;letter-spacing:-.3px;margin-bottom:3px}
+.prof-tagline{font-size:13px;color:rgba(255,255,255,.7);font-weight:500}
+
+.prof-section{margin:0 0 16px}
+.prof-section-label{
+  font-size:11px;font-weight:800;color:var(--g500);letter-spacing:.8px;
+  text-transform:uppercase;padding:0 16px;margin-bottom:7px;
+}
+.prof-card{
+  background:var(--white);border:1px solid var(--g200);
+  border-radius:var(--r16);overflow:hidden;box-shadow:var(--sh1);
+}
+.prof-row{
+  display:flex;align-items:center;gap:12px;padding:14px 16px;
+  border-bottom:1px solid var(--g100);cursor:pointer;transition:background .12s;
+}
+.prof-row:last-child{border-bottom:none}
+.prof-row:active{background:var(--g50)}
+.prof-row-ico{
+  width:36px;height:36px;border-radius:var(--r8);
+  background:var(--p-xlight);color:var(--p);
+  display:flex;align-items:center;justify-content:center;
+  font-size:17px;flex-shrink:0;
+}
+.prof-row-ico.danger{background:var(--red-l);color:var(--red)}
+.prof-row-ico.admin{background:#1e1b4b;color:#a5b4fc}
+.prof-row-content{flex:1;min-width:0}
+.prof-row-label{font-size:11px;color:var(--g500);font-weight:700;margin-bottom:2px;letter-spacing:.2px}
+.prof-row-value{font-size:15px;font-weight:700;color:var(--g900);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prof-row-value.muted{color:var(--g400);font-weight:500}
+.prof-row-action{font-size:20px;color:var(--g300);flex-shrink:0}
+
+.prof-form{
+  background:var(--g50);border-top:1px solid var(--g200);padding:16px;
+}
+.prof-field{margin-bottom:12px}
+.prof-field label{
+  font-size:11px;font-weight:800;color:var(--g500);letter-spacing:.6px;
+  text-transform:uppercase;display:block;margin-bottom:5px;
+}
+.prof-field input,
+.prof-field textarea{
+  width:100%;padding:11px 13px;border:1.5px solid var(--g200);
+  border-radius:var(--r8);font-size:15px;font-weight:600;
+  background:var(--white);color:var(--g900);transition:border-color .15s;
+  font-family:var(--font);
+}
+.prof-field input:focus,
+.prof-field textarea:focus{border-color:var(--p);background:var(--white)}
+.prof-field textarea{resize:vertical;min-height:90px;line-height:1.5}
+.prof-form-actions{display:flex;gap:8px;margin-top:4px}
+.prof-btn-save{
+  flex:1;padding:11px;border-radius:var(--r8);font-size:14px;font-weight:800;
+  background:var(--p);color:#fff;transition:background .15s;
+}
+.prof-btn-save:active{background:var(--p-dark)}
+.prof-btn-cancel{
+  padding:11px 16px;border-radius:var(--r8);font-size:14px;font-weight:700;
+  background:var(--g200);color:var(--g700);
+}
+.prof-btn-danger{
+  width:100%;padding:13px;border-radius:var(--r12);font-size:15px;font-weight:800;
+  background:var(--red-l);color:var(--red);border:1.5px solid var(--red);
+  transition:background .12s;
+}
+.prof-btn-danger:active{background:#fecaca}
+
+/* Ticket cards in profile */
+.ticket-card{
+  border:1px solid var(--g200);border-radius:var(--r12);
+  padding:14px;margin-bottom:10px;background:var(--white);
+}
+.ticket-subject{font-size:14px;font-weight:800;color:var(--g900);margin-bottom:3px}
+.ticket-meta{font-size:11px;color:var(--g500);font-weight:600;margin-bottom:6px}
+.ticket-body{font-size:13px;color:var(--g700);line-height:1.5}
+.ticket-badge{
+  display:inline-block;font-size:10px;font-weight:800;letter-spacing:.6px;
+  text-transform:uppercase;padding:2px 8px;border-radius:999px;margin-top:7px;
+}
+.ticket-badge.open{background:var(--amber-l);color:var(--amber)}
+.ticket-badge.resolved{background:var(--green-l);color:var(--green)}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN PANEL
+═══════════════════════════════════════════════════════════════ */
+.admin-hero{
+  background:linear-gradient(135deg,#09090b 0%,#1e1b4b 50%,#312e81 100%);
+  color:#fff;padding:28px 20px;border-radius:0 0 var(--r24) var(--r24);margin-bottom:20px;
+  text-align:center;
+}
+.admin-chip{
+  display:inline-block;background:var(--amber);color:#000;
+  font-size:10px;font-weight:900;letter-spacing:1px;text-transform:uppercase;
+  padding:3px 11px;border-radius:999px;margin-bottom:12px;
+}
+.admin-title{font-size:24px;font-weight:900;color:#fff;margin-bottom:4px}
+.admin-sub{font-size:13px;color:rgba(255,255,255,.55);font-weight:500}
+.admin-stats{
+  display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px;
+}
+.admin-stat{
+  background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.1);
+  border-radius:var(--r12);padding:14px;text-align:center;
+}
+.admin-stat-n{font-size:30px;font-weight:900;color:#fff;line-height:1}
+.admin-stat-l{font-size:11px;color:rgba(255,255,255,.55);font-weight:600;margin-top:4px}
+
+.admin-section{margin:0 0 16px}
+.admin-section-label{
+  font-size:11px;font-weight:800;color:var(--g500);letter-spacing:.8px;
+  text-transform:uppercase;padding:0 16px;margin-bottom:7px;
+}
+.admin-card{
+  background:var(--white);border:1px solid var(--g200);
+  border-radius:var(--r16);overflow:hidden;box-shadow:var(--sh1);
+}
+.admin-ticket{
+  padding:14px 16px;border-bottom:1px solid var(--g100);
+}
+.admin-ticket:last-child{border-bottom:none}
+.admin-ticket-head{
+  display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;
+}
+.admin-ticket-subject{font-size:14px;font-weight:800;color:var(--g900);flex:1}
+.admin-ticket-from{font-size:11px;color:var(--g500);font-weight:600;margin-bottom:6px}
+.admin-ticket-body{font-size:13px;color:var(--g700);line-height:1.5}
+.admin-ticket-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+.admin-act-btn{
+  padding:5px 11px;border-radius:var(--r8);font-size:11px;font-weight:800;
+  border:1px solid var(--g200);color:var(--g700);background:var(--g100);transition:background .12s;
+}
+.admin-act-btn.green{background:var(--green-l);color:var(--green);border-color:var(--green)}
+.admin-act-btn.red{background:var(--red-l);color:var(--red);border-color:var(--red)}
+.admin-act-btn.blue{background:var(--blue-l);color:var(--blue);border-color:var(--blue)}
+.admin-exit-btn{
+  width:100%;padding:14px;border-radius:var(--r12);font-size:15px;font-weight:800;
+  background:#1e1b4b;color:#fff;margin-bottom:16px;transition:background .12s;
+}
+.admin-exit-btn:active{background:#312e81}
 .owner-card-badges{display:flex;gap:6px;flex-wrap:wrap}
 .bdg{padding:3px 10px;border-radius:20px;font-size:11px;font-weight:800;letter-spacing:.2px}
 .bdg-white {background:rgba(255,255,255,.18);color:#fff}
@@ -446,7 +608,7 @@ a{color:inherit;text-decoration:none}
   <div id="view-list" class="view"></div>
   <div id="view-calling" class="view view-calling"></div>
   <div id="view-callbacks" class="view"></div>
-  <div id="view-dnc" class="view"></div>
+  <div id="view-profile" class="view"></div>
 </main>
 
 <nav class="tab-bar">
@@ -462,9 +624,9 @@ a{color:inherit;text-decoration:none}
     <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
     Upload
   </button>
-  <button class="tab-item" data-tab="dnc" onclick="nav('dnc')">
-    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><circle cx="12" cy="12" r="9"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-    DNC
+  <button class="tab-item" data-tab="profile" onclick="nav('profile')">
+    <svg fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+    Profile
   </button>
 </nav>
 
@@ -812,7 +974,7 @@ function nav(view, params = {}) {
 
 function renderView(v) {
   ({dashboard:renderDashboard,upload:renderUpload,list:renderList,
-    calling:renderCalling,callbacks:renderCallbacks,dnc:renderDNC})[v]?.();
+    calling:renderCalling,callbacks:renderCallbacks,profile:renderProfile})[v]?.();
   renderNav();
 }
 
@@ -1675,48 +1837,567 @@ function renderCallbacks() {
 }
 
 // ══════════════════════════════════════════════════════════════════
-// DNC VIEW
 // ══════════════════════════════════════════════════════════════════
-function renderDNC() {
-  const el = document.getElementById('view-dnc');
-  const all = [];
-  S.lists.forEach(list => list.owners.forEach((o,i) => { if (o.doNotCall) all.push({o,list,idx:i}); }));
+// PROFILE & ADMIN SYSTEM
+// ══════════════════════════════════════════════════════════════════
 
-  if (all.length === 0) {
-    el.innerHTML = `
-      <div class="page-title">Do Not Call</div>
-      <div class="page-sub">Protected contacts</div>
-      <div class="empty">
-        <div class="empty-ico">⛔</div>
-        <div class="empty-title">No DNC entries</div>
-        <div class="empty-sub">Owners marked "Do Not Call" appear here and are automatically skipped during calling sessions</div>
-      </div>`;
-    return;
-  }
+const PROFILE_KEY = 'PROPDIAL_PROFILE';
+const TICKETS_KEY = 'PROPDIAL_TICKETS';
+const ADMIN_HASH_KEY = 'PROPDIAL_ADMIN_HASH';
 
-  el.innerHTML = `
-    <div class="page-title">Do Not Call</div>
-    <div class="page-sub">${all.length} protected contact${all.length!==1?'s':''}</div>
-    <div style="background:var(--g900);color:#fff;border-radius:var(--r12);padding:12px 14px;margin-bottom:16px;font-size:13px;line-height:1.5">
-      ⛔ These owners are skipped automatically during calling sessions. Tap Remove to re-enable.
-    </div>
-    ${all.map(c=>`
-      <div class="orow s-dnc" style="opacity:1">
-        <div class="orow-av" style="background:var(--g900);color:#fff;font-size:18px">⛔</div>
-        <div class="orow-info">
-          <div class="orow-name">${esc(c.o.ownerName)||'(No Name)'}</div>
-          <div class="orow-meta">${esc(c.o.mobile)} · ${esc(c.list.name)}</div>
-        </div>
-        <button class="btn btn-ghost btn-sm" onclick="removeDNC('${c.list.id}','${c.o.id}')" style="flex-shrink:0;font-size:12px">Remove</button>
-      </div>`).join('')}`;
+function loadProfile() {
+  try { return JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}'); } catch { return {}; }
+}
+function saveProfileData(data) { localStorage.setItem(PROFILE_KEY, JSON.stringify(data)); }
+
+function loadTickets() {
+  try { return JSON.parse(localStorage.getItem(TICKETS_KEY) || '[]'); } catch { return []; }
+}
+function saveTickets(t) { localStorage.setItem(TICKETS_KEY, JSON.stringify(t)); }
+
+// SHA-256 via Web Crypto (async)
+async function sha256(str) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-function removeDNC(listId, ownerId) {
-  const list = getList(listId); if (!list) return;
-  const o = list.owners.find(x => x.id === ownerId); if (!o) return;
-  o.doNotCall = false;
-  if (o.leadCategory === 'do_not_call') o.leadCategory = null;
-  persist(); renderDNC(); toast('Removed from DNC','ok');
+// Profile photo picker — stores as base64 in localStorage
+function pickProfilePhoto() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'image/*';
+  inp.onchange = e => {
+    const file = e.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const p = loadProfile(); p.photo = ev.target.result;
+      saveProfileData(p); renderProfile(); toast('Photo updated ✓','ok');
+    };
+    reader.readAsDataURL(file);
+  };
+  inp.click();
+}
+
+let _profSection = null; // which edit section is open
+let _adminUnlocked = false;
+
+function toggleProfSection(s) {
+  _profSection = _profSection === s ? null : s;
+  renderProfile();
+}
+
+function saveProfFields(fields) {
+  const p = loadProfile(); Object.assign(p, fields);
+  saveProfileData(p); _profSection = null; renderProfile(); toast('Saved ✓','ok');
+}
+
+async function changeProfPassword() {
+  const p   = loadProfile();
+  const cur = document.getElementById('pw-cur')?.value || '';
+  const nw  = document.getElementById('pw-new')?.value || '';
+  const cn  = document.getElementById('pw-cfm')?.value || '';
+  if (p.passwordHash) {
+    if (await sha256(cur) !== p.passwordHash) { toast('Current password incorrect','err'); return; }
+  }
+  if (nw.length < 6) { toast('Minimum 6 characters','err'); return; }
+  if (nw !== cn)     { toast('Passwords do not match','err'); return; }
+  p.passwordHash = await sha256(nw);
+  saveProfileData(p); _profSection = null; renderProfile(); toast('Password updated ✓','ok');
+}
+
+async function sendResetRequest() {
+  const email = document.getElementById('reset-email')?.value.trim() || '';
+  if (!email) { toast('Enter your email address','err'); return; }
+  const sub  = encodeURIComponent('[PropDial] Password Reset Request');
+  const body = encodeURIComponent(`Password reset requested for account: ${email}\n\nPlease contact this user to reset their PropDial password.`);
+  window.location.href = `mailto:support@propdial.app?subject=${sub}&body=${body}`;
+  _profSection = null; renderProfile();
+  toast('Reset request sent to support','ok');
+}
+
+async function submitSupportTicket() {
+  const subject = document.getElementById('tkt-subject')?.value.trim() || '';
+  const body    = document.getElementById('tkt-body')?.value.trim() || '';
+  if (!subject) { toast('Add a subject','err'); return; }
+  if (body.length < 10) { toast('Please describe your issue','err'); return; }
+  const prof = loadProfile();
+  const ticket = {
+    id: 'TKT-' + Date.now(),
+    subject, body,
+    name: prof.name  || 'Unknown User',
+    from: prof.email || 'no-email',
+    date: new Date().toISOString(),
+    status: 'open',
+  };
+  const tickets = loadTickets(); tickets.unshift(ticket); saveTickets(tickets);
+  // Open Mail app with pre-filled support email
+  const mailSub  = encodeURIComponent('[PropDial Support] ' + subject);
+  const mailBody = encodeURIComponent(
+    `Ticket ID: ${ticket.id}\nFrom: ${ticket.name} (${ticket.from})\nDate: ${new Date().toLocaleString()}\n\n${body}`
+  );
+  window.location.href = `mailto:zainwilkins@gmail.com?subject=${mailSub}&body=${mailBody}`;
+  _profSection = null; renderProfile();
+  toast('Ticket saved — Mail app opening to send','ok');
+}
+
+function clearAllData() {
+  if (!confirm('Delete ALL data? This cannot be undone.')) return;
+  localStorage.clear(); S.lists = []; S.listId = null; S.ownerIdx = 0;
+  _profSection = null; _adminUnlocked = false;
+  persist(); nav('dashboard'); toast('All data cleared','ok');
+}
+
+// ── Admin panel ──────────────────────────────────────────────────
+
+async function tryAdminLogin() {
+  const pw   = document.getElementById('admin-pw-inp')?.value || '';
+  if (!pw) { toast('Enter admin password','err'); return; }
+  const hash   = await sha256(pw);
+  const stored = localStorage.getItem(ADMIN_HASH_KEY);
+  // First-time login: default password is  PropDial@Admin2024
+  const defaultHash = await sha256('PropDial@Admin2024');
+  const match  = stored ? hash === stored : hash === defaultHash;
+  if (match) {
+    _adminUnlocked = true; _profSection = null;
+    renderProfile(); toast('Admin access granted','ok');
+  } else {
+    toast('Incorrect password','err');
+  }
+}
+
+function adminLogout() {
+  _adminUnlocked = false; renderProfile(); toast('Admin session ended','ok');
+}
+
+async function adminChangePassword() {
+  const nw = document.getElementById('adm-pw-new')?.value || '';
+  const cn = document.getElementById('adm-pw-cfm')?.value || '';
+  if (nw.length < 8) { toast('Min. 8 characters','err'); return; }
+  if (nw !== cn)     { toast('Passwords do not match','err'); return; }
+  localStorage.setItem(ADMIN_HASH_KEY, await sha256(nw));
+  _profSection = null; renderProfile(); toast('Admin password updated ✓','ok');
+}
+
+function adminSetTicketStatus(id, status) {
+  const tickets = loadTickets();
+  const t = tickets.find(x => x.id === id);
+  if (t) { t.status = status; saveTickets(tickets); renderProfile(); }
+}
+
+function adminDeleteTicket(id) {
+  saveTickets(loadTickets().filter(x => x.id !== id));
+  renderProfile(); toast('Ticket deleted','ok');
+}
+
+// ── Render functions ─────────────────────────────────────────────
+
+function renderProfile() {
+  const el = document.getElementById('view-profile'); if (!el) return;
+  if (_adminUnlocked) { renderAdminPanel(el); return; }
+
+  const prof    = loadProfile();
+  const tickets = loadTickets();
+  const myTkts  = tickets.slice(0, 10); // show all from this device
+
+  const avatarInner = prof.photo
+    ? `<img src="${prof.photo}" alt="photo">`
+    : `<span style="font-size:38px">${prof.name ? esc(prof.name.charAt(0).toUpperCase()) : '👤'}</span>`;
+
+  const fld = (id, type, val, ph) =>
+    `<div class="prof-field"><label>${id}</label>` +
+    `<input id="pf-${id.toLowerCase().replace(/\s/g,'-')}" type="${type}" value="${esc(val||'')}" placeholder="${ph}"></div>`;
+
+  el.innerHTML = `
+    <!-- Hero -->
+    <div class="prof-hero">
+      <div class="prof-avatar-wrap">
+        <div class="prof-avatar" onclick="pickProfilePhoto()">${avatarInner}</div>
+        <div class="prof-avatar-edit" onclick="pickProfilePhoto()">✏️</div>
+      </div>
+      <div class="prof-name">${esc(prof.name || 'Your Name')}</div>
+      <div class="prof-tagline">${esc(prof.email || 'Tap Account Details to set up your profile')}</div>
+    </div>
+
+    <!-- Account Details -->
+    <div class="prof-section">
+      <div class="prof-section-label">Account Details</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('account')">
+          <div class="prof-row-ico">👤</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Full Name</div>
+            <div class="prof-row-value${!prof.name?' muted':''}">${esc(prof.name||'Tap to add')}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        <div class="prof-row" onclick="toggleProfSection('account')">
+          <div class="prof-row-ico">✉️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Email Address</div>
+            <div class="prof-row-value${!prof.email?' muted':''}">${esc(prof.email||'Tap to add')}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        <div class="prof-row" onclick="toggleProfSection('account')">
+          <div class="prof-row-ico">📱</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Phone Number</div>
+            <div class="prof-row-value${!prof.phone?' muted':''}">${esc(prof.phone||'Tap to add')}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='account'?`
+          <div class="prof-form">
+            <div class="prof-field"><label>Full Name</label>
+              <input id="pf-name" type="text" value="${esc(prof.name||'')}" placeholder="Your full name"></div>
+            <div class="prof-field"><label>Email Address</label>
+              <input id="pf-email" type="email" value="${esc(prof.email||'')}" placeholder="your@email.com"></div>
+            <div class="prof-field"><label>Phone Number</label>
+              <input id="pf-phone" type="tel" value="${esc(prof.phone||'')}" placeholder="+971 50 000 0000"></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="saveProfFields({
+                name:document.getElementById('pf-name').value,
+                email:document.getElementById('pf-email').value,
+                phone:document.getElementById('pf-phone').value
+              })">Save Changes</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('account')">Cancel</button>
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Security -->
+    <div class="prof-section">
+      <div class="prof-section-label">Security</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('password')">
+          <div class="prof-row-ico">🔐</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">${prof.passwordHash?'Change Password':'Set Password'}</div>
+            <div class="prof-row-value">${prof.passwordHash?'••••••••••':'Not configured'}</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='password'?`
+          <div class="prof-form">
+            ${prof.passwordHash?`<div class="prof-field"><label>Current Password</label>
+              <input id="pw-cur" type="password" placeholder="Enter current password"></div>`:''}
+            <div class="prof-field"><label>New Password</label>
+              <input id="pw-new" type="password" placeholder="Minimum 6 characters"></div>
+            <div class="prof-field"><label>Confirm New Password</label>
+              <input id="pw-cfm" type="password" placeholder="Repeat new password"></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="changeProfPassword()">Update Password</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('password')">Cancel</button>
+            </div>
+          </div>` : ''}
+        <div class="prof-row" onclick="toggleProfSection('resetpw')">
+          <div class="prof-row-ico">🔑</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Forgot Password</div>
+            <div class="prof-row-value">Request a reset via support</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='resetpw'?`
+          <div class="prof-form">
+            <div style="font-size:13px;color:var(--g700);line-height:1.5;margin-bottom:12px">
+              Enter your email and support will send you a reset link.
+            </div>
+            <div class="prof-field"><label>Your Email</label>
+              <input id="reset-email" type="email" value="${esc(prof.email||'')}" placeholder="your@email.com"></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="sendResetRequest()">Send Reset Request</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('resetpw')">Cancel</button>
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Support -->
+    <div class="prof-section">
+      <div class="prof-section-label">Support</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('support')">
+          <div class="prof-row-ico">💬</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Contact Support</div>
+            <div class="prof-row-value">Submit a support query</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='support'?`
+          <div class="prof-form">
+            <div class="prof-field"><label>Subject</label>
+              <input id="tkt-subject" type="text" placeholder="Brief description of your issue"></div>
+            <div class="prof-field"><label>Message</label>
+              <textarea id="tkt-body" placeholder="Please describe your issue in detail…"></textarea></div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" onclick="submitSupportTicket()">Send Query</button>
+              <button class="prof-btn-cancel" onclick="toggleProfSection('support')">Cancel</button>
+            </div>
+          </div>` : ''}
+        ${myTkts.length>0?`
+          <div class="prof-row" onclick="toggleProfSection('mytickets')">
+            <div class="prof-row-ico">📋</div>
+            <div class="prof-row-content">
+              <div class="prof-row-label">My Tickets</div>
+              <div class="prof-row-value">${myTkts.length} submitted</div>
+            </div>
+            <div class="prof-row-action">›</div>
+          </div>
+          ${_profSection==='mytickets'?`
+            <div class="prof-form" style="background:var(--white);padding:12px">
+              ${myTkts.map(t=>`
+                <div class="ticket-card">
+                  <div class="ticket-subject">${esc(t.subject)}</div>
+                  <div class="ticket-meta">${new Date(t.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
+                  <div class="ticket-body">${esc(t.body.slice(0,140))}${t.body.length>140?'…':''}</div>
+                  <span class="ticket-badge ${t.status}">${t.status==='open'?'Open':'Resolved'}</span>
+                </div>`).join('')}
+            </div>` : ''}` : ''}
+        <div class="prof-row" onclick="window.location.href='mailto:zainwilkins@gmail.com'">
+          <div class="prof-row-ico">✉️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Email Support Directly</div>
+            <div class="prof-row-value muted">zainwilkins@gmail.com</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- App -->
+    <div class="prof-section">
+      <div class="prof-section-label">App</div>
+      <div class="prof-card">
+        <div class="prof-row">
+          <div class="prof-row-ico">ℹ️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Version</div>
+            <div class="prof-row-value">PropDial v1.0 · Beta</div>
+          </div>
+        </div>
+        <div class="prof-row" onclick="toggleProfSection('cleardata')">
+          <div class="prof-row-ico danger">🗑️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Clear All Data</div>
+            <div class="prof-row-value" style="color:var(--red)">Delete all lists and profile</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='cleardata'?`
+          <div class="prof-form">
+            <div style="font-size:13px;color:var(--red);font-weight:700;margin-bottom:12px;line-height:1.5">
+              ⚠️ This permanently deletes all call lists, owner data, notes, and your profile. This cannot be undone.
+            </div>
+            <button class="prof-btn-danger" onclick="clearAllData()">Delete Everything</button>
+            <button class="prof-btn-cancel" style="width:100%;margin-top:8px;padding:11px;text-align:center" onclick="toggleProfSection('cleardata')">Cancel</button>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <!-- Admin Access -->
+    <div class="prof-section">
+      <div class="prof-section-label">Owner</div>
+      <div class="prof-card">
+        <div class="prof-row" onclick="toggleProfSection('adminlogin')">
+          <div class="prof-row-ico admin">🛡️</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Admin Panel</div>
+            <div class="prof-row-value muted">Owner access only</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='adminlogin'?`
+          <div class="prof-form" style="background:#0f172a">
+            <div style="color:rgba(255,255,255,.6);font-size:12px;font-weight:700;letter-spacing:.5px;margin-bottom:12px">
+              🛡️ ADMIN AUTHENTICATION
+            </div>
+            <div class="prof-field">
+              <label style="color:rgba(255,255,255,.5)">Admin Password</label>
+              <input id="admin-pw-inp" type="password" placeholder="Enter admin password"
+                style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#fff">
+            </div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" style="background:#6366f1" onclick="tryAdminLogin()">Access Panel</button>
+              <button class="prof-btn-cancel" style="background:rgba(255,255,255,.08);color:#fff" onclick="toggleProfSection('adminlogin')">Cancel</button>
+            </div>
+            <div style="font-size:11px;color:rgba(255,255,255,.3);margin-top:10px;text-align:center">
+              Default password: PropDial@Admin2024<br>Change it after first login.
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <div style="height:100px"></div>`;
+}
+
+// ── Admin panel renderer ─────────────────────────────────────────
+
+function renderAdminPanel(el) {
+  const prof    = loadProfile();
+  const tickets = loadTickets();
+  const totalOwners  = S.lists.reduce((a,l)=>a+l.owners.length,0);
+  const totalCalled  = S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.attempts>0).length,0);
+  const totalConn    = S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callStatus==='connected').length,0);
+  const openTickets  = tickets.filter(t=>t.status==='open').length;
+
+  el.innerHTML = `
+    <!-- Admin hero -->
+    <div class="admin-hero">
+      <div class="admin-chip">⚡ Admin Mode</div>
+      <div class="admin-title">PropDial Control Panel</div>
+      <div class="admin-sub">Private owner dashboard — not visible to users</div>
+      <div class="admin-stats">
+        <div class="admin-stat"><div class="admin-stat-n">${S.lists.length}</div><div class="admin-stat-l">Call Lists</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${totalOwners}</div><div class="admin-stat-l">Total Owners</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${totalCalled}</div><div class="admin-stat-l">Calls Made</div></div>
+        <div class="admin-stat"><div class="admin-stat-n">${openTickets}</div><div class="admin-stat-l">Open Tickets</div></div>
+      </div>
+    </div>
+
+    <!-- User profile overview -->
+    <div class="admin-section">
+      <div class="admin-section-label">User Profile on This Device</div>
+      <div class="admin-card">
+        ${prof.photo?`
+          <div class="prof-row">
+            <div class="prof-row-ico">🖼️</div>
+            <div class="prof-row-content"><div class="prof-row-label">Profile Photo</div><div class="prof-row-value">Uploaded</div></div>
+            <img src="${prof.photo}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0">
+          </div>` : ''}
+        <div class="prof-row">
+          <div class="prof-row-ico">👤</div>
+          <div class="prof-row-content"><div class="prof-row-label">Name</div><div class="prof-row-value${!prof.name?' muted':''}">${esc(prof.name||'Not set')}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico">✉️</div>
+          <div class="prof-row-content"><div class="prof-row-label">Email</div><div class="prof-row-value${!prof.email?' muted':''}">${esc(prof.email||'Not set')}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico">📱</div>
+          <div class="prof-row-content"><div class="prof-row-label">Phone</div><div class="prof-row-value${!prof.phone?' muted':''}">${esc(prof.phone||'Not set')}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico">🔐</div>
+          <div class="prof-row-content"><div class="prof-row-label">Password</div><div class="prof-row-value">${prof.passwordHash?'Configured (hashed, not readable)':'Not set'}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Call lists summary -->
+    <div class="admin-section">
+      <div class="admin-section-label">Call Lists (${S.lists.length})</div>
+      <div class="admin-card">
+        ${S.lists.length===0?`<div class="prof-row"><div class="prof-row-content"><div class="prof-row-value muted">No lists uploaded</div></div></div>`
+          : S.lists.map(list=>{
+            const called = list.owners.filter(o=>o.attempts>0).length;
+            const conn   = list.owners.filter(o=>o.callStatus==='connected').length;
+            const vm     = list.owners.filter(o=>o.callStatus==='voicemail').length;
+            const dnc    = list.owners.filter(o=>o.doNotCall).length;
+            return `<div class="prof-row">
+              <div class="prof-row-ico">📋</div>
+              <div class="prof-row-content">
+                <div class="prof-row-label">${esc(list.name)}</div>
+                <div class="prof-row-value" style="font-size:12px;font-weight:600;color:var(--g500)">
+                  ${list.owners.length} owners · ${called} called · ${conn} connected · ${vm} VM · ${dnc} DNC
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+      </div>
+    </div>
+
+    <!-- Calling stats -->
+    <div class="admin-section">
+      <div class="admin-section-label">Calling Statistics</div>
+      <div class="admin-card">
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--green-l);color:var(--green)">✓</div>
+          <div class="prof-row-content"><div class="prof-row-label">Connected</div><div class="prof-row-value">${totalConn}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--amber-l);color:var(--amber)">📬</div>
+          <div class="prof-row-content"><div class="prof-row-label">Voicemail</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callStatus==='voicemail').length,0)}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--red-l);color:var(--red)">⛔</div>
+          <div class="prof-row-content"><div class="prof-row-label">Do Not Call</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.doNotCall).length,0)}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico" style="background:var(--blue-l);color:var(--blue)">🧑‍💼</div>
+          <div class="prof-row-content"><div class="prof-row-label">Agents Identified</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.agent).length,0)}</div></div>
+        </div>
+        <div class="prof-row">
+          <div class="prof-row-ico">📅</div>
+          <div class="prof-row-content"><div class="prof-row-label">Callbacks Scheduled</div>
+            <div class="prof-row-value">${S.lists.reduce((a,l)=>a+l.owners.filter(o=>o.callbackDate).length,0)}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Support tickets -->
+    <div class="admin-section">
+      <div class="admin-section-label">Support Tickets (${tickets.length} total · ${openTickets} open)</div>
+      <div class="admin-card">
+        ${tickets.length===0
+          ? `<div class="prof-row"><div class="prof-row-content"><div class="prof-row-value muted">No tickets yet</div></div></div>`
+          : tickets.map(t=>`
+            <div class="admin-ticket">
+              <div class="admin-ticket-head">
+                <div class="admin-ticket-subject">${esc(t.subject)}</div>
+                <span class="ticket-badge ${t.status}">${t.status==='open'?'Open':'Resolved'}</span>
+              </div>
+              <div class="admin-ticket-from">${esc(t.name)} · ${esc(t.from)} · ${new Date(t.date).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</div>
+              <div class="admin-ticket-body">${esc(t.body)}</div>
+              <div class="admin-ticket-actions">
+                ${t.status==='open'
+                  ? `<button class="admin-act-btn green" onclick="adminSetTicketStatus('${t.id}','resolved')">✓ Resolve</button>`
+                  : `<button class="admin-act-btn" onclick="adminSetTicketStatus('${t.id}','open')">Re-open</button>`}
+                <button class="admin-act-btn blue" onclick="window.location.href='mailto:${esc(t.from)}?subject=${encodeURIComponent('Re: '+t.subject)}'">✉ Reply</button>
+                <button class="admin-act-btn red" onclick="adminDeleteTicket('${t.id}')">Delete</button>
+              </div>
+            </div>`).join('')}
+      </div>
+    </div>
+
+    <!-- Admin security -->
+    <div class="admin-section">
+      <div class="admin-section-label">Admin Security</div>
+      <div class="admin-card">
+        <div class="prof-row" onclick="toggleProfSection('adminpw')">
+          <div class="prof-row-ico admin">🔑</div>
+          <div class="prof-row-content">
+            <div class="prof-row-label">Change Admin Password</div>
+            <div class="prof-row-value muted">Update access credentials</div>
+          </div>
+          <div class="prof-row-action">›</div>
+        </div>
+        ${_profSection==='adminpw'?`
+          <div class="prof-form" style="background:#0f172a">
+            <div class="prof-field">
+              <label style="color:rgba(255,255,255,.5)">New Admin Password</label>
+              <input id="adm-pw-new" type="password" placeholder="Min. 8 characters"
+                style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#fff">
+            </div>
+            <div class="prof-field">
+              <label style="color:rgba(255,255,255,.5)">Confirm Password</label>
+              <input id="adm-pw-cfm" type="password" placeholder="Repeat new password"
+                style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.15);color:#fff">
+            </div>
+            <div class="prof-form-actions">
+              <button class="prof-btn-save" style="background:#6366f1" onclick="adminChangePassword()">Update Password</button>
+              <button class="prof-btn-cancel" style="background:rgba(255,255,255,.08);color:#fff" onclick="toggleProfSection('adminpw')">Cancel</button>
+            </div>
+          </div>` : ''}
+      </div>
+    </div>
+
+    <button class="admin-exit-btn" onclick="adminLogout()">✕ Exit Admin Panel</button>
+    <div style="height:100px"></div>`;
 }
 
 // ══════════════════════════════════════════════════════════════════
